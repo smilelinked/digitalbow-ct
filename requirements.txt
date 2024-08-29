@@ -1,0 +1,15 @@
+opencv-contrib-python-headless==4.5.5.62
+tornado==6.4
+numpy==1.23.5
+scipy~=1.14.1
+matplotlib
+reportlab==3.6.13
+dicttoxml~=1.7.16
+urllib3==2.0.7
+pyarmor==8.4.6
+pillow~=10.0.1
+fpdf~=1.7.2
+boto3~=1.35.3
+botocore~=1.35.3
+redis~=5.0.8
+requests~=2.32.3
