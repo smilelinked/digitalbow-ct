@@ -1,9 +1,9 @@
 FROM python:3.10.11 AS builder
 WORKDIR /usr/src/app
-COPY requirement.txt ./
+COPY requirements.txt ./
 COPY main.py ./
 COPY bow ./bow
-RUN pip install -i https://pypi.tuna.tsinghua.edu.cn/simple -r requirement.txt
+RUN pip install -i https://pypi.tuna.tsinghua.edu.cn/simple -r requirements.txt
 RUN pyarmor gen -r main.py && pyarmor gen -r -i bow
 
 FROM python:3.10.11-slim

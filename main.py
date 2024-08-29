@@ -29,6 +29,7 @@ def make_app():
 
             # 配准
             (r"/registration", handler.RegistrationHandler),
+            (r"/pose/(?P<cid>[0-9]+)", handler.WritePoseHandler),
 
             # 算法功能：5个模块
             (r"/stable_dignose/(?P<cid>[0-9]+)", handler.StableConnectHandler),  # 功能模块1：稳定重复位

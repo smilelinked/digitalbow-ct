@@ -1,5 +1,8 @@
 import numpy as np
 import copy
+import math
+
+from bow.algm import get_information_json, put_information_json
 
 
 def rigid_transformation(moving_list, fixed_list):
@@ -62,3 +65,36 @@ def rigid_transformation(moving_list, fixed_list):
     transformation_array = transformation_rough.flatten()
 
     return transformation_array
+
+
+def write_pose(uid, cid, moving_list, fixed_list):
+    case_info = get_information_json(uid, cid)
+
+    angle_op = case_info["IP"]
+
+    rigid_tf = rigid_transformation(moving_list, fixed_list)
+    jaw_splint_pose = np.reshape(rigid_tf, (4, 4))
+
+    gap = [0, -2, 2]
+    up_f = jaw_splint_pose[0:3, 0:3] @ [0, -2 + 5.8, 0] + gap
+    translation = np.array([[1, 0, 0, up_f[0]],
+                            [0, 1, 0, up_f[1]],
+                            [0, 0, 1, up_f[2]],
+                            [0, 0, 0, 1]])
+    transform_f_up = translation @ jaw_splint_pose
+    transform_t_f = np.array([[1, 0, 0, 0],
+                              [0, math.cos(math.pi * (-angle_op) / 180), -math.sin(math.pi * (-angle_op) / 180), 0],
+                              [0, math.sin(math.pi * (-angle_op) / 180), math.cos(math.pi * (-angle_op) / 180), 0],
+                              [0, 0, 0, 1]])
+
+    # 数据打包
+    pose_info = {
+        "jawSplint_pose": jaw_splint_pose.tolist(),
+        "Transform_F_UP": transform_f_up.tolist(),
+        "Transform_T_F": transform_t_f.tolist(),
+    }
+    # 存储
+    case_info.update(pose_info)
+    put_information_json(uid, cid, case_info)
+
+    return rigid_tf

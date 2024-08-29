@@ -15,7 +15,7 @@ from bow.algm import ShowingException, stable_step1, stable_step2, stable_step3,
     CANCEL_SIGNAL_VALUE, get_stable_step3_queue, clear_stable_related_resource, position, get_position_queue, \
     clear_position_related_resource, motion, get_motion_queue, get_case_status, modify_information, motion_renew, \
     STOP_WS_CODE, MOTION_RUNNING_CASES
-from bow.registration import rigid_transformation
+from bow.registration import rigid_transformation, write_pose
 from bow.report import stable_report, position_report, standard_report, standard_xml, custom_report
 
 ErrMap = {
@@ -135,6 +135,22 @@ class RegistrationHandler(BaseHandler):
         fixed_list = post_data.get("fixed_list")
 
         data = rigid_transformation(moving_list, fixed_list)
+        self.write({"code": 200, "message": "成功", "data": data})
+
+
+class WritePoseHandler(BaseHandler):
+    @authenticated
+    def post(self, cid):
+        post_body = self.request.body
+        if not post_body:
+            return self.write(ErrMissingParam)
+
+        post_data = json.loads(post_body.decode('utf-8'))
+
+        moving_list = post_data.get("moving_list")
+        fixed_list = post_data.get("fixed_list")
+
+        data = write_pose(self._current_user, cid, moving_list, fixed_list)
         self.write({"code": 200, "message": "成功", "data": data})
 
 
