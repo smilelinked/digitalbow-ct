@@ -124,7 +124,7 @@ class InformationHandler(BaseHandler):
 
 class RegistrationHandler(BaseHandler):
     @authenticated
-    def post(self):
+    def post(self, cid):
         post_body = self.request.body
         if not post_body:
             return self.write(ErrMissingParam)

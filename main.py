@@ -28,7 +28,7 @@ def make_app():
             (r"/information/(?P<cid>[0-9]+)", handler.InformationHandler),
 
             # 配准
-            (r"/registration", handler.RegistrationHandler),
+            (r"/registration/(?P<cid>[0-9]+)", handler.RegistrationHandler),
             (r"/pose/(?P<cid>[0-9]+)", handler.WritePoseHandler),
 
             # 算法功能：5个模块
