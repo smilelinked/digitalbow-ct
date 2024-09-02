@@ -134,7 +134,7 @@ class RegistrationHandler(BaseHandler):
         moving_list = post_data.get("moving_list")
         fixed_list = post_data.get("fixed_list")
 
-        data = rigid_transformation(moving_list, fixed_list)
+        data = rigid_transformation(moving_list, fixed_list).tolist()
         self.write({"code": 200, "message": "成功", "data": data})
 
 

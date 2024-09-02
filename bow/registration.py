@@ -64,7 +64,7 @@ def rigid_transformation(moving_list, fixed_list):
     # 返回变换矩阵的一维数组
     transformation_array = transformation_rough.flatten()
 
-    return transformation_array.tolist()
+    return transformation_array
 
 
 def write_pose(uid, cid, moving_list, fixed_list):
