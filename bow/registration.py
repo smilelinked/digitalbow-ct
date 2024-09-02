@@ -70,7 +70,7 @@ def rigid_transformation(moving_list, fixed_list):
 def write_pose(uid, cid, moving_list, fixed_list):
     case_info = get_information_json(uid, cid)
 
-    angle_op = case_info["IP"]
+    angle_op = case_info["angle_OP"]
 
     rigid_tf = rigid_transformation(moving_list, fixed_list)
     jaw_splint_pose = np.reshape(rigid_tf, (4, 4))
