@@ -131,10 +131,11 @@ class RegistrationHandler(BaseHandler):
 
         post_data = json.loads(post_body.decode('utf-8'))
 
+        moving_object_list = post_data.get("moving_object_list")
         moving_list = post_data.get("moving_list")
         fixed_list = post_data.get("fixed_list")
 
-        data = rigid_transformation(moving_list, fixed_list).tolist()
+        data = rigid_transformation(moving_object_list, moving_list, fixed_list).tolist()
         self.write({"code": 200, "message": "成功", "data": data})
 
 
@@ -147,10 +148,11 @@ class WritePoseHandler(BaseHandler):
 
         post_data = json.loads(post_body.decode('utf-8'))
 
+        moving_object_list = post_data.get("moving_object_list")
         moving_list = post_data.get("moving_list")
         fixed_list = post_data.get("fixed_list")
 
-        data = write_pose(self._current_user, cid, moving_list, fixed_list)
+        data = write_pose(self._current_user, cid, moving_object_list, moving_list, fixed_list)
         self.write({"code": 200, "message": "成功", "data": data})
 
 
