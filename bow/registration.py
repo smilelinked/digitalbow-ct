@@ -5,8 +5,8 @@ import math
 from bow.algm import get_information_json, put_information_json
 
 
-def rigid_transformation(moving_list, fixed_list):
-    moving_object_list = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
+def rigid_transformation(moving_object_list, moving_list, fixed_list):
+    
     # 将一维数组转换为矩阵
     moving_object_matrix_world = np.reshape(moving_object_list, (4, 4))
     fixed_array = np.reshape(fixed_list, (4, 3))
@@ -67,12 +67,12 @@ def rigid_transformation(moving_list, fixed_list):
     return transformation_array
 
 
-def write_pose(uid, cid, moving_list, fixed_list):
+def write_pose(uid, cid, moving_object_list, moving_list, fixed_list):
     case_info = get_information_json(uid, cid)
 
     angle_op = case_info["angle_OP"]
 
-    rigid_tf = rigid_transformation(moving_list, fixed_list)
+    rigid_tf = rigid_transformation(moving_object_list, moving_list, fixed_list)
     jaw_splint_pose = np.reshape(rigid_tf, (4, 4))
 
     gap = [0, -2, 2]
