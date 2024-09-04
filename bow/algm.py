@@ -37,12 +37,20 @@ STOP_SIGNAL_VALUE = 'stop'
 STOP_WS_CODE = 1001
 MOTION_RUNNING_CASES = set()
 
-r = redis.Redis(
+connection_pool = redis.ConnectionPool(
     host=os.getenv('REDIS_HOST', '121.36.209.14'),
     port=os.getenv('REDIS_PORT', 6379),
     password=os.getenv('REDIS_PASSWORD'),
     decode_responses=True,
 )
+
+
+async def get_redis_connection():
+    """
+    获取一个 Redis 连接，该连接从全局连接池中获取，确保多个连接之间互不影响。
+    """
+    # 使用连接池创建 Redis 实例
+    return redis.Redis(connection_pool=connection_pool)
 
 
 def get_object_prefix(uid, cid):
@@ -155,6 +163,7 @@ def get_stable_step1_queue(cid):
 
 
 async def del_stable_step1_queue(cid):
+    r = await get_redis_connection()
     await r.delete(get_stable_step1_queue(cid))
 
 
@@ -163,6 +172,7 @@ def get_stable_step3_queue(cid):
 
 
 async def del_stable_step3_queue(cid):
+    r = await get_redis_connection()
     await r.delete(get_stable_step3_queue(cid))
 
 
@@ -171,6 +181,7 @@ def get_position_queue(cid):
 
 
 async def del_position_queue(cid):
+    r = await get_redis_connection()
     await r.delete(get_position_queue(cid))
 
 
@@ -179,6 +190,7 @@ def get_motion_queue(cid):
 
 
 async def del_motion_queue(cid):
+    r = await get_redis_connection()
     await r.delete(get_motion_queue(cid))
 
 
@@ -194,6 +206,8 @@ async def stable_step1(uid, cid, conns):
     transform_t_f = np.array(case_info["Transform_T_F"])
 
     stable_data, is_first_pic = get_stable_json(uid, cid)
+
+    r = await get_redis_connection()
 
     try:
         while True:
@@ -586,6 +600,8 @@ async def stable_step3(uid, cid, conns):
 
     stable_data, is_first_pic = get_stable_json(uid, cid)
 
+    r = await get_redis_connection()
+
     try:
         while True:
             _, pic_name = await r.brpop([get_stable_step3_queue(cid)])
@@ -726,6 +742,8 @@ async def position(uid, cid, conns):
     transform_t_f = np.array(case_info["Transform_T_F"])
 
     position_data, is_first_pic = get_position_json(uid, cid)
+
+    r = await get_redis_connection()
 
     try:
         while True:
@@ -902,6 +920,8 @@ async def motion(uid, cid):
     camera_matrix, dist_coeffs = get_calibration_pkl(uid, cid)
 
     case_info = get_information_json(uid, cid)
+
+    r = await get_redis_connection()
 
     try:
         while True:

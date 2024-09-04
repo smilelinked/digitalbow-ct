@@ -11,10 +11,10 @@ from tornado import httputil
 from tornado.concurrent import run_on_executor
 from tornado.ioloop import IOLoop
 
-from bow.algm import ShowingException, stable_step1, stable_step2, stable_step3, r, get_stable_step1_queue, \
+from bow.algm import ShowingException, stable_step1, stable_step2, stable_step3, get_stable_step1_queue, \
     CANCEL_SIGNAL_VALUE, get_stable_step3_queue, clear_stable_related_resource, position, get_position_queue, \
     clear_position_related_resource, motion, get_motion_queue, get_case_status, modify_information, motion_renew, \
-    STOP_WS_CODE, MOTION_RUNNING_CASES
+    STOP_WS_CODE, MOTION_RUNNING_CASES, get_redis_connection
 from bow.registration import rigid_transformation, write_pose
 from bow.report import stable_report, position_report, standard_report, standard_xml, custom_report
 
@@ -207,6 +207,7 @@ class StableConnectHandler(tornado.websocket.WebSocketHandler):
         logging.info(f"client actively closes the connection: {self.case_id} in {self.step}")
         # if self.case_id in StableConnectHandler.connections and StableConnectHandler.connections[self.case_id] != self:
         #     return
+        r = await get_redis_connection()
         if self.step == 'step1':
             await r.rpush(get_stable_step1_queue(self.case_id), CANCEL_SIGNAL_VALUE)
         elif self.step == 'step3':
@@ -226,6 +227,8 @@ class StableHandler(BaseHandler):
 
         step_state = post_data.get("step")
         pic_name = post_data.get("picture_name")
+
+        r = await get_redis_connection()
 
         if step_state == "step1":
             await r.lpush(get_stable_step1_queue(cid), pic_name)
@@ -278,6 +281,7 @@ class PositionConnectHandler(tornado.websocket.WebSocketHandler):
 
     async def send_cancel(self):
         logging.info(f"client actively closes the connection: {self.case_id} in position")
+        r = await get_redis_connection()
         await r.rpush(get_position_queue(self.case_id), json.dumps({
             "picture_name": CANCEL_SIGNAL_VALUE
         }))
@@ -297,6 +301,8 @@ class PositionHandler(BaseHandler):
         # position_id = post_data.get("position_id")
         # position_name = post_data.get("position_name")
         pic_name = post_data.get("picture_name")
+
+        r = await get_redis_connection()
 
         if pic_name == "clear":
             await clear_position_related_resource(self._current_user, cid)
@@ -325,6 +331,8 @@ class StandardHandler(BaseHandler):
 
         if cid not in MOTION_RUNNING_CASES:
             IOLoop.current().spawn_callback(motion, self._current_user, cid)
+
+        r = await get_redis_connection()
         await r.lpush(get_motion_queue(cid), post_body)
 
         self.write({"code": 200})
@@ -346,6 +354,8 @@ class CustomHandler(BaseHandler):
 
         if cid not in MOTION_RUNNING_CASES:
             IOLoop.current().spawn_callback(motion, self._current_user, cid)
+
+        r = await get_redis_connection()
         await r.lpush(get_motion_queue(cid), post_body)
 
         self.write({"code": 200})
