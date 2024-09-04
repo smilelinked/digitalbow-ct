@@ -40,6 +40,7 @@ MOTION_RUNNING_CASES = set()
 r = redis.Redis(
     host=os.getenv('REDIS_HOST', '121.36.209.14'),
     port=os.getenv('REDIS_PORT', 6379),
+    password=os.getenv('REDIS_PASSWORD'),
     decode_responses=True,
 )
 

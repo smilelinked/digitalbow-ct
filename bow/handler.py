@@ -333,8 +333,8 @@ class StandardHandler(BaseHandler):
 class CustomHandler(BaseHandler):
     @async_authenticated
     async def post(self, cid):
-        post_data = self.request.body
-        if post_data:
+        post_body = self.request.body
+        if post_body:
             post_data = self.request.body.decode('utf-8')
             post_data = json.loads(post_data)
             # check post data validity
@@ -346,7 +346,7 @@ class CustomHandler(BaseHandler):
 
         if cid not in MOTION_RUNNING_CASES:
             IOLoop.current().spawn_callback(motion, self._current_user, cid)
-        await r.lpush(get_motion_queue(cid), post_data)
+        await r.lpush(get_motion_queue(cid), post_body)
 
         self.write({"code": 200})
 

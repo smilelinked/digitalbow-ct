@@ -16,7 +16,8 @@ import xml.etree.ElementTree as ET
 from xml.dom.minidom import parseString
 from fpdf import FPDF
 
-from bow.algm import get_information_json, get_stable_json, get_object_prefix, put_json, put_information_json
+from bow.algm import get_information_json, get_stable_json, get_object_prefix, put_json, put_information_json, \
+    get_position_json
 from bow.s3 import put_obj, list_objects, get_obj_exception
 from bow.utils import (print_chinese,
                        point_trajectory,
@@ -399,7 +400,7 @@ def position_report(uid, cid):
     #####################################################################
     # -----------  读入1张模板图片    ------------ #
     #####################################################################
-    source_dir = os.getcwd() + "/" + "source" + "/"
+    source_dir = "./images/"
 
     tmp1 = source_dir + "position_page1.png"
     tmp2 = source_dir + "position_page2.png"
@@ -414,7 +415,7 @@ def position_report(uid, cid):
     case_info = get_information_json(uid, cid)
 
     # *************** 读json文件
-    temple, _ = get_stable_json(uid, cid)
+    temple, _ = get_position_json(uid, cid)
 
     # 不同的参考平面, 不同的数据
     position_data = []
