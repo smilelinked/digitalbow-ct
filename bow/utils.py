@@ -70,11 +70,16 @@ def moving_average(arr, n=10, m=4):
 # ----------------------------------------------------------#
 # 过滤函数：过滤靠得比较近的点，排除个别比较远的点
 # ----------------------------------------------------------#
-def filter_close_points(points, radius=2.0):
+def filter_close_points(points, origin=[0, 0, 0], radius=2.0):
     # 将点集转换为NumPy数组
     points = np.array(points)
-    # 计算点到原点的距离
-    distances = np.linalg.norm(points, axis=1)
+
+    # 将原点转换为NumPy数组
+    origin = np.array(origin)
+
+    # 计算每个点到原点的距离
+    distances = np.linalg.norm(points - origin, axis=1)
+
     # 选取在半径范围内的点
     filtered_points = points[distances <= radius]
 
