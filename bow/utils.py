@@ -88,6 +88,7 @@ def coincident_point(arr, radius=0.1):
     arr = np.array(arr)
     temp = np.zeros(len(arr))
     dist = distance.squareform(distance.pdist(arr))
+    print(f"temp: {temp}, dist: {dist}")
     for i in range(len(dist)):
         temp[i] = sum(d <= radius for d in dist[i])
     idx = np.argmax(temp)

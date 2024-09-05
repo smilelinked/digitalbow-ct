@@ -355,238 +355,240 @@ async def stable_step1(uid, cid, conns):
 
 
 async def stable_step2(uid, cid, conns):
-    camera_matrix, dist_coeffs = get_calibration_pkl(uid, cid)
+    try:
+        camera_matrix, dist_coeffs = get_calibration_pkl(uid, cid)
 
-    case_info = get_information_json(uid, cid)
-    ip = case_info["IP"]
-    lc = case_info["LC"]
-    rc = case_info["RC"]
-    reference = case_info["reference"]
-    transform_f_up = np.array(case_info["Transform_F_UP"])
-    transform_t_f = np.array(case_info["Transform_T_F"])
+        case_info = get_information_json(uid, cid)
+        ip = case_info["IP"]
+        lc = case_info["LC"]
+        rc = case_info["RC"]
+        reference = case_info["reference"]
+        transform_f_up = np.array(case_info["Transform_F_UP"])
+        transform_t_f = np.array(case_info["Transform_T_F"])
 
-    stable_data, _ = get_stable_json(uid, cid)
+        stable_data, _ = get_stable_json(uid, cid)
 
-    # 需要存储的数据
-    keys = [
-        'ip_3d', 'lc_3d', 'rc_3d', 'angle_3d',
-        'ip_list', 'lc_list', 'rc_list',
-        'ip_3d_tragus', 'lc_3d_tragus', 'rc_3d_tragus', 'angle_3d_tragus',
-        'ip_list_tragus', 'lc_list_tragus', 'rc_list_tragus'
-    ]
-    contents = {key: [] for key in keys}
+        # 需要存储的数据
+        keys = [
+            'ip_3d', 'lc_3d', 'rc_3d', 'angle_3d',
+            'ip_list', 'lc_list', 'rc_list',
+            'ip_3d_tragus', 'lc_3d_tragus', 'rc_3d_tragus', 'angle_3d_tragus',
+            'ip_list_tragus', 'lc_list_tragus', 'rc_list_tragus'
+        ]
+        contents = {key: [] for key in keys}
 
-    effective_frame = 0
+        effective_frame = 0
 
-    video_url = get_stable_video(uid, cid)
-    cap = cv2.VideoCapture(video_url)
-    num_frame = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    fps = int(cap.get(cv2.CAP_PROP_FPS))
-    logging.info(f"number of frame: {num_frame}")
+        video_url = get_stable_video(uid, cid)
+        cap = cv2.VideoCapture(video_url)
+        num_frame = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        fps = int(cap.get(cv2.CAP_PROP_FPS))
+        logging.info(f"number of frame: {num_frame}")
 
-    for count in range(num_frame):
-        # 获取1帧, BGR彩色图， read函数返回2个值，1个是否成功，1个图像数据
-        success, img = cap.read()
+        for count in range(num_frame):
+            # 获取1帧, BGR彩色图， read函数返回2个值，1个是否成功，1个图像数据
+            success, img = cap.read()
 
-        # TODO 异常处理: 读图失败
-        if not success:
-            continue
+            # TODO 异常处理: 读图失败
+            if not success:
+                continue
 
-        img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        success, low_stable_matrix, _, _ = calculate_pose_matrix(img_gray, camera_matrix, dist_coeffs)
+            img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            success, low_stable_matrix, _, _ = calculate_pose_matrix(img_gray, camera_matrix, dist_coeffs)
 
-        # TODO 异常处理： 上下板姿态检测失败
-        if not success:
-            continue
+            # TODO 异常处理： 上下板姿态检测失败
+            if not success:
+                continue
 
-        # 最终的矩阵
-        # 参照静态照片第1张。  静态 动态 起始点会有细微差别
-        matrix = transform_f_up @ low_stable_matrix @ np.array(stable_data[0]["Transform_LP_F"])
+            # 最终的矩阵
+            # 参照静态照片第1张。  静态 动态 起始点会有细微差别
+            matrix = transform_f_up @ low_stable_matrix @ np.array(stable_data[0]["Transform_LP_F"])
 
-        # 眶耳平面,  F坐标系
-        # IP, LC, RC的实际坐标值
-        new_ip = (matrix @ np.append(ip, 1))[:-1]
-        new_lc = (matrix @ np.append(lc, 1))[:-1]
-        new_rc = (matrix @ np.append(rc, 1))[:-1]
-        euler = Rotation.from_matrix(matrix[0:3, 0:3]).as_euler('xyz', degrees=True)
-        # 保存, 3D显示用
-        contents['ip_3d'].append(new_ip)
-        contents['lc_3d'].append(new_lc)
-        contents['rc_3d'].append(new_rc)
-        contents['angle_3d'].append(euler)
+            # 眶耳平面,  F坐标系
+            # IP, LC, RC的实际坐标值
+            new_ip = (matrix @ np.append(ip, 1))[:-1]
+            new_lc = (matrix @ np.append(lc, 1))[:-1]
+            new_rc = (matrix @ np.append(rc, 1))[:-1]
+            euler = Rotation.from_matrix(matrix[0:3, 0:3]).as_euler('xyz', degrees=True)
+            # 保存, 3D显示用
+            contents['ip_3d'].append(new_ip)
+            contents['lc_3d'].append(new_lc)
+            contents['rc_3d'].append(new_rc)
+            contents['angle_3d'].append(euler)
 
-        # *************** IP, LC, RC的相对坐标值: 以静态第1张为参考系的运动轨迹
-        # 保留4位小数
-        diff_ip = new_ip - stable_data[0]["pic1_point"]["IP"]
-        diff_lc = new_lc - stable_data[0]["pic1_point"]["LC"]
-        diff_rc = new_rc - stable_data[0]["pic1_point"]["RC"]
-        # 保存, 2D显示用
-        contents['ip_list'].append(diff_ip)
-        contents['lc_list'].append(diff_lc)
-        contents['rc_list'].append(diff_rc)
+            # *************** IP, LC, RC的相对坐标值: 以静态第1张为参考系的运动轨迹
+            # 保留4位小数
+            diff_ip = new_ip - stable_data[0]["pic1_point"]["IP"]
+            diff_lc = new_lc - stable_data[0]["pic1_point"]["LC"]
+            diff_rc = new_rc - stable_data[0]["pic1_point"]["RC"]
+            # 保存, 2D显示用
+            contents['ip_list'].append(diff_ip)
+            contents['lc_list'].append(diff_lc)
+            contents['rc_list'].append(diff_rc)
 
-        # 鼻翼耳屏线,  T坐标系
-        # IP, LC, RC的实际坐标值
-        # 保留4位小数
-        new_ip_tragus = (transform_t_f @ matrix @ np.append(ip, 1))[:-1]
-        new_lc_tragus = (transform_t_f @ matrix @ np.append(lc, 1))[:-1]
-        new_rc_tragus = (transform_t_f @ matrix @ np.append(rc, 1))[:-1]
-        euler_tragus = transform_t_f[0:3, 0:3] @ np.array(euler)
-        # 保存, 3D显示用
-        contents['ip_3d_tragus'].append(new_ip_tragus)
-        contents['lc_3d_tragus'].append(new_lc_tragus)
-        contents['rc_3d_tragus'].append(new_rc_tragus)
-        contents['angle_3d_tragus'].append(euler_tragus)
+            # 鼻翼耳屏线,  T坐标系
+            # IP, LC, RC的实际坐标值
+            # 保留4位小数
+            new_ip_tragus = (transform_t_f @ matrix @ np.append(ip, 1))[:-1]
+            new_lc_tragus = (transform_t_f @ matrix @ np.append(lc, 1))[:-1]
+            new_rc_tragus = (transform_t_f @ matrix @ np.append(rc, 1))[:-1]
+            euler_tragus = transform_t_f[0:3, 0:3] @ np.array(euler)
+            # 保存, 3D显示用
+            contents['ip_3d_tragus'].append(new_ip_tragus)
+            contents['lc_3d_tragus'].append(new_lc_tragus)
+            contents['rc_3d_tragus'].append(new_rc_tragus)
+            contents['angle_3d_tragus'].append(euler_tragus)
 
-        # *************** IP, LC, RC的相对坐标值: 以静态第1张为参考系的运动轨迹
-        # 保留4位小数
-        diff_ip_tragus = new_ip_tragus - stable_data[1]["pic1_point"]["IP"]
-        diff_lc_tragus = new_lc_tragus - stable_data[1]["pic1_point"]["LC"]
-        diff_rc_tragus = new_rc_tragus - stable_data[1]["pic1_point"]["RC"]
-        # 保存, 2D显示用
-        contents['ip_list_tragus'].append(diff_ip_tragus)
-        contents['lc_list_tragus'].append(diff_lc_tragus)
-        contents['rc_list_tragus'].append(diff_rc_tragus)
+            # *************** IP, LC, RC的相对坐标值: 以静态第1张为参考系的运动轨迹
+            # 保留4位小数
+            diff_ip_tragus = new_ip_tragus - stable_data[1]["pic1_point"]["IP"]
+            diff_lc_tragus = new_lc_tragus - stable_data[1]["pic1_point"]["LC"]
+            diff_rc_tragus = new_rc_tragus - stable_data[1]["pic1_point"]["RC"]
+            # 保存, 2D显示用
+            contents['ip_list_tragus'].append(diff_ip_tragus)
+            contents['lc_list_tragus'].append(diff_lc_tragus)
+            contents['rc_list_tragus'].append(diff_rc_tragus)
 
-        # 有效帧数自加1
-        effective_frame += 1
+            # 有效帧数自加1
+            effective_frame += 1
 
-        # 与前端通信
-        web_ip, web_lc, web_rc = [], [], []
-        if reference == "frankfurt":
-            web_ip, web_lc, web_rc = diff_ip.tolist(), diff_lc.tolist(), diff_rc.tolist()
-        elif reference == "ala-tragus":
-            web_ip, web_lc, web_rc = diff_ip_tragus.tolist(), diff_lc_tragus.tolist(), diff_rc_tragus.tolist()
+            # 与前端通信
+            web_ip, web_lc, web_rc = [], [], []
+            if reference == "frankfurt":
+                web_ip, web_lc, web_rc = diff_ip.tolist(), diff_lc.tolist(), diff_rc.tolist()
+            elif reference == "ala-tragus":
+                web_ip, web_lc, web_rc = diff_ip_tragus.tolist(), diff_lc_tragus.tolist(), diff_rc_tragus.tolist()
 
-        averaged_cord = (web_ip, web_lc, web_rc)
-        queue = CircularQueue(10)
-        if not queue.is_full():
-            queue.push((web_ip, web_lc, web_rc))
-        else:
-            queue.pop()
-            queue.push((web_ip, web_lc, web_rc))
-
-        if queue.is_full():
-            averaged_cord = queue.get_averaged()
-
-        try:
-            content = {
-                "total": num_frame,
-                "current": effective_frame,
-                "IP": averaged_cord[0],
-                "LC": averaged_cord[1],
-                "RC": averaged_cord[2],
-            }
-            ws = conns.get(cid)
-            if ws:
-                await ws.write_message(json.dumps(content))
+            averaged_cord = (web_ip, web_lc, web_rc)
+            queue = CircularQueue(10)
+            if not queue.is_full():
+                queue.push((web_ip, web_lc, web_rc))
             else:
-                await asyncio.sleep(0.01)
-        except (StreamClosedError, WebSocketClosedError):
-            ws = conns.get(cid)
-            if ws and ws.close_code == 1000:
-                conns.pop(cid)
-                break
-            conns[cid] = None
-        except Exception as e:
-            logging.error(f"[Stable step2]: case {cid} unexpected exception: {e}")
+                queue.pop()
+                queue.push((web_ip, web_lc, web_rc))
+
+            if queue.is_full():
+                averaged_cord = queue.get_averaged()
+
+            try:
+                content = {
+                    "total": num_frame,
+                    "current": effective_frame,
+                    "IP": averaged_cord[0],
+                    "LC": averaged_cord[1],
+                    "RC": averaged_cord[2],
+                }
+                ws = conns.get(cid)
+                if ws:
+                    await ws.write_message(json.dumps(content))
+                else:
+                    await asyncio.sleep(0.01)
+            except (StreamClosedError, WebSocketClosedError):
+                ws = conns.get(cid)
+                if ws and ws.close_code == 1000:
+                    conns.pop(cid)
+                    break
+                conns[cid] = None
+            except Exception as e:
+                logging.error(f"[Stable step2]: case {cid} unexpected exception: {e}")
+                ws = conns.get(cid)
+                if ws:
+                    conns.pop(cid)
+                    ws.write_message(json.dumps({"err_code": 1500}))
+
+        # 全为不合格帧保护
+        if len(contents['ip_3d']) < 10:
             ws = conns.get(cid)
             if ws:
+                await ws.write_message(json.dumps({"err_code": 1500, "err_message": "视频质量过低，请重做"}))
                 conns.pop(cid)
-                ws.write_message(json.dumps({"err_code": 1500}))
+            return
 
-    # 全为不合格帧保护
-    if len(contents['ip_3d']) < 10:
-        ws = conns.get(cid)
-        if ws:
-            await ws.write_message(json.dumps({"err_code": 1500, "err_message": "视频质量过低，请重做"}))
+        # 轨迹线平滑处理
+        moving_average_contents = {key: moving_average(content) for key, content in contents.items()}
+
+        # 计算稳定点
+        # 眶耳平面下
+        # 10张静态照片点的重合点
+        static_point = filter_close_points(stable_data[0]["points"]["IP_3D"], 2.0)
+        cp_ip_static = coincident_point(static_point, 0.1)[1]
+
+        # 动态轨迹线的重合点
+        cp_ip_motion = coincident_point(moving_average_contents['ip_3d'], 0.1)[1]
+
+        # 稳定点：静态 与 动态 的中点
+        sp_ip = (cp_ip_static + cp_ip_motion) / 2
+
+        # 稳定点做原点，2D数据需要更新
+        stable_data[0]["points"]["IP"] = np.around(stable_data[0]["points"]["IP"] - sp_ip, 4).tolist()
+        moving_average_contents['ip_list'] = np.around(moving_average_contents['ip_list'] - sp_ip, 4)
+
+        # 鼻翼耳屏线下
+        # 10张静态照片点的重合点
+        static_point_tragus = filter_close_points(stable_data[1]["points"]["IP_3D"], 2.0)
+        cp_ip_static_tragus = coincident_point(static_point_tragus, 0.1)[1]
+
+        # 动态轨迹线的重合点
+        cp_ip_motion_tragus = coincident_point(moving_average_contents['ip_3d_tragus'], 0.1)[1]
+
+        # 稳定点：静态 与 动态 的中点
+        sp_ip_tragus = (cp_ip_static_tragus + cp_ip_motion_tragus) / 2
+
+        # 稳定点做原点，2D数据需要更新
+        stable_data[1]["points"]["IP"] = np.around(stable_data[1]["points"]["IP"] - sp_ip_tragus, 4).tolist()
+        moving_average_contents['ip_list_tragus'] = np.around(moving_average_contents['ip_list_tragus'] - sp_ip_tragus, 4)
+
+        # 保存数据
+        common_track = {
+            "frame": num_frame,
+            "frequency": fps,
+            "size": effective_frame,
+        }
+        oe_track = {
+            "IP_3D": moving_average_contents['ip_3d'].tolist(),
+            "LC_3D": moving_average_contents['lc_3d'].tolist(),
+            "RC_3D": moving_average_contents['rc_3d'].tolist(),
+            "Angle_3D": moving_average_contents['angle_3d'].tolist(),
+            "IP_list": moving_average_contents['ip_list'].tolist(),
+            "LC_list": moving_average_contents['lc_list'].tolist(),
+            "RC_list": moving_average_contents['rc_list'].tolist(),
+        }
+        oe_stable_points = {
+            "IP_3D": sp_ip.tolist(),
+            "IP": (sp_ip - sp_ip).tolist()
+        }
+        tr_track = {
+            "IP_3D": moving_average_contents['ip_3d_tragus'].tolist(),
+            "LC_3D": moving_average_contents['lc_3d_tragus'].tolist(),
+            "RC_3D": moving_average_contents['rc_3d_tragus'].tolist(),
+            "Angle_3D": moving_average_contents['angle_3d_tragus'].tolist(),
+            "IP_list": moving_average_contents['ip_list_tragus'].tolist(),
+            "LC_list": moving_average_contents['lc_list_tragus'].tolist(),
+            "RC_list": moving_average_contents['rc_list_tragus'].tolist(),
+        }
+        tr_stable_points = {
+            "IP_3D": sp_ip_tragus.tolist(),
+            "IP": (sp_ip_tragus - sp_ip_tragus).tolist()
+        }
+        stable_data[0]["track"].update(common_track | oe_track)
+        stable_data[0]["stable_point"].update(oe_stable_points)
+        stable_data[1]["track"].update(common_track | tr_track)
+        stable_data[1]["stable_point"].update(tr_stable_points)
+
+        put_stable_json(uid, cid, stable_data)
+        put_obj(get_object_prefix(uid, cid) + "stable.pckl")
+
+        del img, img_gray
+        cap.release()
+        gc.collect()
+    except Exception as e:
+        logging.exception(f"[Stable step2]: case {cid} running failed with {e}")
+        # close websocket.
+        if cid in conns:
+            ws = conns.get(cid)
+            if ws:
+                ws.close(STOP_WS_CODE, "close normally")
             conns.pop(cid)
-        return
-
-    # 轨迹线平滑处理
-    moving_average_contents = {key: moving_average(content) for key, content in contents.items()}
-
-    # 计算稳定点
-    # 眶耳平面下
-    # 10张静态照片点的重合点
-    static_point = filter_close_points(stable_data[0]["points"]["IP_3D"], 2.0)
-    cp_ip_static = coincident_point(static_point, 0.1)[1]
-
-    # 动态轨迹线的重合点
-    cp_ip_motion = coincident_point(moving_average_contents['ip_3d'], 0.1)[1]
-
-    # 稳定点：静态 与 动态 的中点
-    sp_ip = (cp_ip_static + cp_ip_motion) / 2
-
-    # 稳定点做原点，2D数据需要更新
-    stable_data[0]["points"]["IP"] = np.around(stable_data[0]["points"]["IP"] - sp_ip, 4).tolist()
-    moving_average_contents['ip_list'] = np.around(moving_average_contents['ip_list'] - sp_ip, 4)
-
-    # 鼻翼耳屏线下
-    # 10张静态照片点的重合点
-    static_point_tragus = filter_close_points(stable_data[1]["points"]["IP_3D"], 2.0)
-    cp_ip_static_tragus = coincident_point(static_point_tragus, 0.1)[1]
-
-    # 动态轨迹线的重合点
-    cp_ip_motion_tragus = coincident_point(moving_average_contents['ip_3d_tragus'], 0.1)[1]
-
-    # 稳定点：静态 与 动态 的中点
-    sp_ip_tragus = (cp_ip_static_tragus + cp_ip_motion_tragus) / 2
-
-    # 稳定点做原点，2D数据需要更新
-    stable_data[1]["points"]["IP"] = np.around(stable_data[1]["points"]["IP"] - sp_ip_tragus, 4).tolist()
-    moving_average_contents['ip_list_tragus'] = np.around(moving_average_contents['ip_list_tragus'] - sp_ip_tragus, 4)
-
-    # 保存数据
-    common_track = {
-        "frame": num_frame,
-        "frequency": fps,
-        "size": effective_frame,
-    }
-    oe_track = {
-        "IP_3D": moving_average_contents['ip_3d'].tolist(),
-        "LC_3D": moving_average_contents['lc_3d'].tolist(),
-        "RC_3D": moving_average_contents['rc_3d'].tolist(),
-        "Angle_3D": moving_average_contents['angle_3d'].tolist(),
-        "IP_list": moving_average_contents['ip_list'].tolist(),
-        "LC_list": moving_average_contents['lc_list'].tolist(),
-        "RC_list": moving_average_contents['rc_list'].tolist(),
-    }
-    oe_stable_points = {
-        "IP_3D": sp_ip.tolist(),
-        "IP": (sp_ip - sp_ip).tolist()
-    }
-    tr_track = {
-        "IP_3D": moving_average_contents['ip_3d_tragus'].tolist(),
-        "LC_3D": moving_average_contents['lc_3d_tragus'].tolist(),
-        "RC_3D": moving_average_contents['rc_3d_tragus'].tolist(),
-        "Angle_3D": moving_average_contents['angle_3d_tragus'].tolist(),
-        "IP_list": moving_average_contents['ip_list_tragus'].tolist(),
-        "LC_list": moving_average_contents['lc_list_tragus'].tolist(),
-        "RC_list": moving_average_contents['rc_list_tragus'].tolist(),
-    }
-    tr_stable_points = {
-        "IP_3D": sp_ip_tragus.tolist(),
-        "IP": (sp_ip_tragus - sp_ip_tragus).tolist()
-    }
-    stable_data[0]["track"].update(common_track | oe_track)
-    stable_data[0]["stable_point"].update(oe_stable_points)
-    stable_data[1]["track"].update(common_track | tr_track)
-    stable_data[1]["stable_point"].update(tr_stable_points)
-
-    put_stable_json(uid, cid, stable_data)
-    put_obj(get_object_prefix(uid, cid) + "stable.pckl")
-
-    del img, img_gray
-    cap.release()
-    gc.collect()
-
-    # close websocket.
-    if cid in conns:
-        ws = conns.get(cid)
-        if ws:
-            ws.close(STOP_WS_CODE, "close normally")
-        conns.pop(cid)
 
 
 async def stable_step3(uid, cid, conns):
@@ -935,7 +937,7 @@ async def motion(uid, cid):
 
             video_info = json.loads(video_element[1])
             logging.info(f"[Motion]: case {cid} get a new video info: {video_info}")
-            video_type = video_info.get("video_type")
+            video_type = video_info.get("video_type") or video_info.get("video_name")
             if video_type == STOP_SIGNAL_VALUE:
                 queue_len = await r.llen(get_motion_queue(cid))
                 if queue_len == 0:

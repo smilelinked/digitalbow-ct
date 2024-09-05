@@ -343,8 +343,7 @@ class CustomHandler(BaseHandler):
     async def post(self, cid):
         post_body = self.request.body
         if post_body:
-            post_data = self.request.body.decode('utf-8')
-            post_data = json.loads(post_data)
+            post_data = json.loads(post_body.decode('utf-8'))
             # check post data validity
             need_params = ["custom_id", "custom_name", "video_name"]
             for param in need_params:
