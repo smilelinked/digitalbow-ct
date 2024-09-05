@@ -938,7 +938,7 @@ async def motion(uid, cid):
 
             video_info = json.loads(video_element[1])
             logging.info(f"[Motion]: case {cid} get a new video info: {video_info}")
-            video_type = video_info.get("video_type") or video_info.get("video_name")
+            video_type = video_info.get("video_type") or video_info.get("video_name").removesuffix(".mp4")
             if video_type == STOP_SIGNAL_VALUE:
                 queue_len = await r.llen(get_motion_queue(cid))
                 if queue_len == 0:
