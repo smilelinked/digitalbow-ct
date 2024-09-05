@@ -510,7 +510,8 @@ async def stable_step2(uid, cid, conns):
         # 计算稳定点
         # 眶耳平面下
         # 10张静态照片点的重合点
-        static_point = filter_close_points(stable_data[0]["points"]["IP_3D"], 2.0)
+        origin = stable_data[0]["pic1_point"]["IP"]
+        static_point = filter_close_points(stable_data[0]["points"]["IP_3D"], origin = origin, radius = 2.0)
         cp_ip_static = coincident_point(static_point, 0.1)[1]
 
         # 动态轨迹线的重合点
@@ -525,7 +526,7 @@ async def stable_step2(uid, cid, conns):
 
         # 鼻翼耳屏线下
         # 10张静态照片点的重合点
-        static_point_tragus = filter_close_points(stable_data[1]["points"]["IP_3D"], 2.0)
+        static_point_tragus = filter_close_points(stable_data[1]["points"]["IP_3D"], origin = origin, radius = 2.0)
         cp_ip_static_tragus = coincident_point(static_point_tragus, 0.1)[1]
 
         # 动态轨迹线的重合点
