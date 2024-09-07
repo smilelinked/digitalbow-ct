@@ -2,10 +2,11 @@ import numpy as np
 import copy
 import math
 
-from bow.algm import get_information_json, put_information_json
+from bow.algm import get_information_json, put_information_json, get_object_prefix
+from bow.s3 import put_obj
 
 
-def rigid_transformation(moving_object_list, moving_list, fixed_list):
+def rigid_transformation(uid, cid, moving_object_list, moving_list, fixed_list):
     
     # 将一维数组转换为矩阵
     moving_object_matrix_world = np.reshape(moving_object_list, (4, 4))
@@ -64,6 +65,9 @@ def rigid_transformation(moving_object_list, moving_list, fixed_list):
     # 返回变换矩阵的一维数组
     transformation_array = transformation_rough.flatten()
 
+    # obs标记，方便前端跳转
+    put_obj(get_object_prefix(uid, cid) + "registration.pckl")
+
     return transformation_array
 
 
@@ -72,7 +76,7 @@ def write_pose(uid, cid, moving_object_list, moving_list, fixed_list):
 
     angle_op = case_info["angle_OP"]
 
-    rigid_tf = rigid_transformation(moving_object_list, moving_list, fixed_list)
+    rigid_tf = rigid_transformation(uid, cid, moving_object_list, moving_list, fixed_list)
     jaw_splint_pose = np.reshape(rigid_tf, (4, 4))
 
     gap = [0, -2, 2]
@@ -96,5 +100,7 @@ def write_pose(uid, cid, moving_object_list, moving_list, fixed_list):
     # 存储
     case_info.update(pose_info)
     put_information_json(uid, cid, case_info)
+
+    put_obj(get_object_prefix(uid, cid) + "pose.pckl")
 
     return rigid_tf.tolist()
