@@ -106,7 +106,6 @@ def ws_authenticated(method):
 class IllCaseStatusHandler(BaseHandler):
     @authenticated
     def get(self, cid):
-        print("?")
         content = get_case_status(self._current_user, cid)
         self.write(json.dumps(content))
 

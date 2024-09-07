@@ -16,7 +16,7 @@ from tornado.iostream import StreamClosedError
 from tornado.websocket import WebSocketClosedError
 
 from bow.s3 import get_obj_exception, generate_signed_url, has_obj, put_obj, del_objects_by_prefix, \
-    list_objects
+    list_objects, list_all_files
 from bow.utils import (calculate_pose_matrix,
                        moving_average,
                        filter_close_points,
@@ -511,7 +511,7 @@ async def stable_step2(uid, cid, conns):
         # 眶耳平面下
         # 10张静态照片点的重合点
         origin = stable_data[0]["pic1_point"]["IP"]
-        static_point = filter_close_points(stable_data[0]["points"]["IP_3D"], origin = origin, radius = 2.0)
+        static_point = filter_close_points(stable_data[0]["points"]["IP_3D"], origin=origin, radius=2.0)
         cp_ip_static = coincident_point(static_point, 0.1)[1]
 
         # 动态轨迹线的重合点
@@ -526,7 +526,7 @@ async def stable_step2(uid, cid, conns):
 
         # 鼻翼耳屏线下
         # 10张静态照片点的重合点
-        static_point_tragus = filter_close_points(stable_data[1]["points"]["IP_3D"], origin = origin, radius = 2.0)
+        static_point_tragus = filter_close_points(stable_data[1]["points"]["IP_3D"], origin=origin, radius=2.0)
         cp_ip_static_tragus = coincident_point(static_point_tragus, 0.1)[1]
 
         # 动态轨迹线的重合点
@@ -537,7 +537,8 @@ async def stable_step2(uid, cid, conns):
 
         # 稳定点做原点，2D数据需要更新
         stable_data[1]["points"]["IP"] = np.around(stable_data[1]["points"]["IP"] - sp_ip_tragus, 4).tolist()
-        moving_average_contents['ip_list_tragus'] = np.around(moving_average_contents['ip_list_tragus'] - sp_ip_tragus, 4)
+        moving_average_contents['ip_list_tragus'] = np.around(moving_average_contents['ip_list_tragus'] - sp_ip_tragus,
+                                                              4)
 
         # 保存数据
         common_track = {
@@ -931,7 +932,6 @@ async def motion(uid, cid):
             video_element = await r.brpop([get_motion_queue(cid)], timeout=10)
             if video_element is None:
                 logging.warning(f"[Motion]: case {cid} did not get a video in 10s, breaking...")
-                MOTION_RUNNING_CASES.remove(cid)
                 break
 
             MOTION_RUNNING_CASES.add(cid)
@@ -1050,6 +1050,7 @@ async def motion(uid, cid):
         pass
     finally:
         logging.info(f"[Motion]: case {cid} finish recognition...")
+        MOTION_RUNNING_CASES.remove(cid)
         await r.close()
 
 
@@ -1160,13 +1161,12 @@ def get_case_status(uid, cid):
     content = {value: False for value in file_mapping.values()}
 
     object_prefix = get_object_prefix(uid, cid)
-    resp = list_objects(object_prefix)
-    if resp.get('ResponseMetadata', {}).get('HTTPStatusCode') < 300 and resp.get('Contents'):
-        for content_item in resp.get('Contents'):
-            key = content_item.get('Key')
-            relative_key = key.replace(object_prefix, "")
-            if relative_key in file_mapping:
-                content[file_mapping[relative_key]] = True
+    items = list_all_files(object_prefix)
+    for item in items:
+        relative_key = item.replace(object_prefix, "")
+        print(f"key : {relative_key}")
+        if not relative_key.startswith('models') and relative_key in file_mapping:
+            content[file_mapping[relative_key]] = True
 
     return content
 

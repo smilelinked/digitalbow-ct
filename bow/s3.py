@@ -80,3 +80,32 @@ def del_objects_by_prefix(prefix):
         return
     objs = [{'Key': obj.get('Key')} for obj in resp.get('Contents')]
     s3_client.delete_objects(Bucket=bucket, Delete={'Objects': objs, 'Quiet': False})
+
+
+def list_all_files(prefix):
+    # 存储所有符合条件的文件
+    all_files = []
+    continuation_token = None
+
+    # 循环获取所有对象
+    while True:
+        # 列出对象并处理分页
+        if continuation_token:
+            response = s3_client.list_objects_v2(Bucket=bucket, Prefix=prefix, ContinuationToken=continuation_token)
+        else:
+            response = s3_client.list_objects_v2(Bucket=bucket, Prefix=prefix)
+
+        # 检查请求结果
+        if 'Contents' in response:
+            # 过滤掉指定前缀的文件
+            filtered_files = [content['Key'] for content in response['Contents']]
+            all_files.extend(filtered_files)
+
+        # 如果没有更多对象，退出循环
+        if not response.get('IsTruncated'):  # 如果返回的响应没有被截断，表示已经获取完所有对象
+            break
+
+        # 如果有更多对象，将继续分页
+        continuation_token = response.get('NextContinuationToken')
+
+    return all_files
