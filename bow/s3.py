@@ -109,3 +109,11 @@ def list_all_files(prefix):
         continuation_token = response.get('NextContinuationToken')
 
     return all_files
+
+
+def move_file(source_key, destination_key):
+    s3_client.copy_object(
+        Bucket=bucket,
+        CopySource={'Bucket': bucket, 'Key': source_key},
+        Key=destination_key
+    )

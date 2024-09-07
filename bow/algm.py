@@ -16,7 +16,7 @@ from tornado.iostream import StreamClosedError
 from tornado.websocket import WebSocketClosedError
 
 from bow.s3 import get_obj_exception, generate_signed_url, has_obj, put_obj, del_objects_by_prefix, \
-    list_objects, list_all_files
+    list_objects, list_all_files, move_file
 from bow.utils import (calculate_pose_matrix,
                        moving_average,
                        filter_close_points,
@@ -24,6 +24,7 @@ from bow.utils import (calculate_pose_matrix,
                        point_trajectory
                        )
 
+DEFAULT_CALIBRATION_PKL = 'digitalbow/calibration/nova10/calibration.pckl'
 CALIBRATION_PKL = 'calibration.pckl'
 INFORMATION_JSON = 'information.json'
 STABLE_JSON = 'stable.json'
@@ -59,6 +60,8 @@ def get_object_prefix(uid, cid):
 
 def get_calibration_pkl(uid, cid):
     cali_file = get_object_prefix(uid, cid) + CALIBRATION_PKL
+    if not has_obj(cali_file):
+        move_file(DEFAULT_CALIBRATION_PKL, cali_file)
     return pickle.loads(get_obj_exception(cali_file).read())
 
 
