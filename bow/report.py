@@ -181,7 +181,7 @@ def stable_report(uid, cid):
     #####################################################################
     # -----------  读入1张模板图片    ------------ #
     #####################################################################
-    tmp1 = "./images" + "/" + "stable_page1.png"
+    tmp1 = "./images/stable_page1.png"
     img_page1 = cv2.imread(tmp1)
 
     #####################################################################
@@ -439,8 +439,8 @@ def position_report(uid, cid):
     # 新建临时文件夹
     tmp_dir = tempfile.mkdtemp()
 
-    cv2.imwrite(tmp_dir + "position_report_page1.png", img_page1)
-    cv2.imwrite(tmp_dir + "position_report_page2.png", img_page2)
+    cv2.imwrite(os.path.join(tmp_dir, "position_report_page1.png"), img_page1)
+    cv2.imwrite(os.path.join(tmp_dir, "position_report_page2.png"), img_page2)
 
     pdf_content = process_img_tmp_dir(tmp_dir)
     pdf_file = get_object_prefix(uid, cid) + 'position_report.pdf'
