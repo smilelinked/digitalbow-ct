@@ -1,4 +1,5 @@
 import asyncio
+import copy
 import gc
 import io
 import logging
@@ -136,7 +137,7 @@ def get_position_json(uid, cid):
                 "IP_3D": [], "LC_3D": [], "RC_3D": [], "IP": [], "LC": [], "RC": [], "position_info": []
             },
         }
-        return [child_dict for _ in range(2)], True
+        return [copy.deepcopy(child_dict) for _ in range(2)], True
 
 
 def put_position_json(uid, cid, data):
@@ -876,7 +877,7 @@ async def position(uid, cid, conns):
                 {"position_id": "2", "position_name": "后退接触位"},
                 {"position_id": "3", "position_name": "下颌姿势位"},
             ]
-            num = int(len(position_data[0]["points"]["IP"]) / 2) - 1
+            num = len(position_data[0]["points"]["IP"]) - 1
             position_data[0]["points"]["position_info"].append(position_settings[num])
 
             put_position_json(uid, cid, position_data)
@@ -918,7 +919,7 @@ async def position(uid, cid, conns):
     except asyncio.CancelledError:
         pass
     finally:
-        logging.info(f"[Stable step3]: case {cid} finish step3...")
+        logging.info(f"[Position]: case {cid} finish position...")
         await r.close()
 
 
@@ -1167,7 +1168,6 @@ def get_case_status(uid, cid):
     items = list_all_files(object_prefix)
     for item in items:
         relative_key = item.replace(object_prefix, "")
-        print(f"key : {relative_key}")
         if not relative_key.startswith('models') and relative_key in file_mapping:
             content[file_mapping[relative_key]] = True
 
