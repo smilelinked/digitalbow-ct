@@ -879,6 +879,7 @@ async def position(uid, cid, conns):
             ]
             num = len(position_data[0]["points"]["IP"]) - 1
             position_data[0]["points"]["position_info"].append(position_settings[num])
+            position_data[1]["points"]["position_info"].append(position_settings[num])
 
             put_position_json(uid, cid, position_data)
 
@@ -1172,6 +1173,19 @@ def get_case_status(uid, cid):
             content[file_mapping[relative_key]] = True
 
     return content
+
+
+def app_ready(uid, cid):
+    put_obj(get_object_prefix(uid, cid) + "app_ready.pckl")
+
+
+def code_detect(uid, cid):
+    # TODO: qr code detection
+    return
+
+
+def finish_detect(uid, cid):
+    del_objects_by_prefix(get_object_prefix(uid, cid) + 'detect')
 
 
 def modify_information(uid, cid, entries):

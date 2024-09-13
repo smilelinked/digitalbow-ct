@@ -25,6 +25,9 @@ def make_app():
             (r"/case_status/(?P<cid>[0-9]+)", handler.IllCaseStatusHandler),
 
             # 病例准备
+            (r"/app_ready/(?P<cid>[0-9]+)", handler.AppReadyHandler),
+            (r"/code_detect/(?P<cid>[0-9]+)", handler.CodeDetectHandler),
+            (r"/finish_detect/(?P<cid>[0-9]+)", handler.FinishDetectHandler),
             (r"/information/(?P<cid>[0-9]+)", handler.InformationHandler),
 
             # 配准

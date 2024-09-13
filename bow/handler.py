@@ -14,7 +14,7 @@ from tornado.ioloop import IOLoop
 from bow.algm import ShowingException, stable_step1, stable_step2, stable_step3, get_stable_step1_queue, \
     CANCEL_SIGNAL_VALUE, get_stable_step3_queue, clear_stable_related_resource, position, get_position_queue, \
     clear_position_related_resource, motion, get_motion_queue, get_case_status, modify_information, motion_renew, \
-    STOP_WS_CODE, MOTION_RUNNING_CASES, get_redis_connection
+    STOP_WS_CODE, MOTION_RUNNING_CASES, get_redis_connection, app_ready, code_detect, finish_detect
 from bow.registration import rigid_transformation, write_pose
 from bow.report import stable_report, position_report, standard_report, standard_xml, custom_report
 
@@ -108,6 +108,27 @@ class IllCaseStatusHandler(BaseHandler):
     def get(self, cid):
         content = get_case_status(self._current_user, cid)
         self.write(json.dumps(content))
+
+
+class AppReadyHandler(BaseHandler):
+    @authenticated
+    def post(self, cid):
+        app_ready(self._current_user, cid)
+        self.write({"code": 200, "message": "成功"})
+
+
+class CodeDetectHandler(BaseHandler):
+    @authenticated
+    def post(self, cid):
+        code_detect(self._current_user, cid)
+        self.write({"code": 200, "message": "成功"})
+
+
+class FinishDetectHandler(BaseHandler):
+    @authenticated
+    def post(self, cid):
+        finish_detect(self._current_user, cid)
+        self.write({"code": 200, "message": "成功"})
 
 
 class InformationHandler(BaseHandler):
