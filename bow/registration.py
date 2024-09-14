@@ -1,14 +1,12 @@
 import numpy as np
 import copy
 import math
-import cv2
 
 from bow.algm import get_information_json, put_information_json, get_object_prefix
 from bow.s3 import put_obj
 
 
 def rigid_transformation(uid, cid, moving_object_list, moving_list, fixed_list):
-    
     # 将一维数组转换为矩阵
     moving_object_matrix_world = np.reshape(moving_object_list, (4, 4))
     fixed_array = np.reshape(fixed_list, (4, 3))
@@ -105,73 +103,3 @@ def write_pose(uid, cid, moving_object_list, moving_list, fixed_list):
     put_obj(get_object_prefix(uid, cid) + "pose.pckl")
 
     return rigid_tf.tolist()
-
-class AprilTagDetector:
-    
-    def __init__(self, dictionary_type=cv2.aruco.DICT_APRILTAG_36h11):
-        # 初始化ArUco字典和参数
-        self.ARUCO_DICT = cv2.aruco.Dictionary_get(dictionary_type)
-        self.ARUCO_PARAMS = cv2.aruco.DetectorParameters_create()
-
-    @staticmethod
-    def determine_tag_orientation(corners):
-        """
-        确定AprilTag码的方向
-        corners: 检测到的四个角点坐标
-        返回: 'Normal' 或 'Inverted'
-        """
-        center = np.mean(corners[0], axis=0)
-        first_corner = corners[0][0]
-        relative_pos = first_corner - center
-        
-        if relative_pos[0] < 0 and relative_pos[1] < 0:
-            return 'Normal'
-        else:
-            return 'Inverted'
-
-    def detect_and_identify(self, image_path, nummarker, save_path=None):
-        """处理单张图像，识别AprilTag并确定其方向"""
-        frame = cv2.imread(image_path)
-        if frame is None:
-            print(f"无法加载图片 {image_path}")
-            return None
-
-        # 使用 detectMarkers 检测标记
-        corners, ids, rejected = cv2.aruco.detectMarkers(frame, self.ARUCO_DICT, parameters=self.ARUCO_PARAMS)
-
-        green_count = 0
-        yellow_count = 0
-
-        if ids is not None:
-            for i in range(len(ids)):
-                orientation = self.determine_tag_orientation(corners[i])
-                cX, cY = tuple(corners[i][0].mean(axis=0).astype(int))
-                # Convert corners[i] to the required shape
-                corner_points = np.int32(corners[i]).reshape((-1, 1, 2))
-                if orientation == 'Inverted':
-                    cv2.polylines(frame, [corner_points], True, (0, 255, 255), 6)  # 黄色边框
-                    yellow_count += 1
-                else:
-                    cv2.polylines(frame, [corner_points], True, (0, 255, 0), 6)  # 绿色边框
-                    green_count += 1
-
-        # 保存处理后的图像
-        if save_path:
-            cv2.imwrite(save_path, frame)
-            print(f"图像已保存至 {save_path}")
-
-        # 打印结果
-        total_tags = green_count + yellow_count
-        print(f"可识别（正常标签）数量: {green_count}")
-        print(f"可识别（反向标签）数量: {yellow_count}")  
-
-        # nummarker值根据实际情况进行调整
-        damaged_tags = nummarker - total_tags 
-        print(f"无法识别标识码的数量: {damaged_tags}")
-
-        if green_count != nummarker:
-            print("警告：部分标记码无法识别,请检查。")
-        else:
-            print("一切正常。")
-        
-        return frame

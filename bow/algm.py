@@ -1179,9 +1179,65 @@ def app_ready(uid, cid):
     put_obj(get_object_prefix(uid, cid) + "app_ready.pckl")
 
 
-def code_detect(uid, cid):
-    # TODO: qr code detection
-    return
+def code_detect(uid, cid, module, need_valid_count=6):
+    image_prefix = f"{get_object_prefix(uid, cid)}detect/{module}"
+    try:
+        pic_resp = generate_signed_url(image_prefix + '.jpg')
+        # TODO: try aiohttp
+        resp = requests.get(pic_resp)
+        arr = np.asarray(bytearray(resp.content), dtype=np.uint8)
+        frame = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+    except Exception as e:
+        raise ShowingException('读取图片失败')
+
+    # 使用 detectMarkers 检测标记
+    corners, ids, rejected = cv2.aruco.detectMarkers(
+        frame,
+        cv2.aruco.Dictionary_get(cv2.aruco.DICT_APRILTAG_36h11),
+        parameters=cv2.aruco.DetectorParameters_create()
+    )
+
+    def determine_tag_orientation(corners):
+        """
+        确定AprilTag码的方向
+        corners: 检测到的四个角点坐标
+        返回: 'Normal' 或 'Inverted'
+        """
+        center = np.mean(corners[0], axis=0)
+        first_corner = corners[0][0]
+        relative_pos = first_corner - center
+
+        if relative_pos[0] < 0 and relative_pos[1] < 0:
+            return 'Normal'
+        else:
+            return 'Inverted'
+
+    green_count = 0
+    yellow_count = 0
+
+    if ids is not None:
+        for i in range(len(ids)):
+            orientation = determine_tag_orientation(corners[i])
+            # cX, cY = tuple(corners[i][0].mean(axis=0).astype(int))
+            # Convert corners[i] to the required shape
+            corner_points = np.int32(corners[i]).reshape((-1, 1, 2))
+            if orientation == 'Inverted':
+                cv2.polylines(frame, [corner_points], True, (0, 255, 255), 6)  # 黄色边框
+                yellow_count += 1
+            else:
+                cv2.polylines(frame, [corner_points], True, (0, 255, 0), 6)  # 绿色边框
+                green_count += 1
+
+    if green_count == need_valid_count:
+        return
+
+    ret, buffer = cv2.imencode('.jpg', frame)
+    image_bytes = buffer.tobytes()
+    put_obj(image_prefix + '_result.jpg', image_bytes, 'image/jpeg')
+    raise ShowingException(json.dumps({
+        'green_count': green_count,
+        'yellow_count': yellow_count,
+    }))
 
 
 def finish_detect(uid, cid):

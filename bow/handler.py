@@ -120,7 +120,14 @@ class AppReadyHandler(BaseHandler):
 class CodeDetectHandler(BaseHandler):
     @authenticated
     def post(self, cid):
-        code_detect(self._current_user, cid)
+        post_body = self.request.body
+        if not post_body:
+            return self.write(ErrMissingParam)
+
+        post_data = json.loads(post_body.decode('utf-8'))
+        module = post_data.get("module")
+
+        code_detect(self._current_user, cid, module)
         self.write({"code": 200, "message": "成功"})
 
 

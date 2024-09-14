@@ -44,11 +44,11 @@ def has_obj(obj):
             raise Exception(f"head object failed with {e}")
 
 
-def put_obj(obj, body=''):
+def put_obj(obj, body='', content_type='string'):
     client = s3_client
     if body == '':
         client = new_client()
-    return client.put_object(Bucket=bucket, Key=obj, Body=body)
+    return client.put_object(Bucket=bucket, Key=obj, Body=body, ContentType=content_type)
 
 
 def put_obj_exception(obj, body):
