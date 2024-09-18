@@ -127,8 +127,12 @@ class CodeDetectHandler(BaseHandler):
         post_data = json.loads(post_body.decode('utf-8'))
         module = post_data.get("module")
 
-        code_detect(self._current_user, cid, module)
-        self.write({"code": 200, "message": "成功"})
+        valid, resp_data = code_detect(self._current_user, cid, module)
+        if valid:
+            self.write({"code": 200, "message": "成功", "data": resp_data})
+        else:
+            self.set_status(500)
+            self.write({"code": 500, "message": "失败", "data": resp_data})
 
 
 class FinishDetectHandler(BaseHandler):

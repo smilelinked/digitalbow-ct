@@ -1188,6 +1188,7 @@ def code_detect(uid, cid, module, need_valid_count=6):
         arr = np.asarray(bytearray(resp.content), dtype=np.uint8)
         frame = cv2.imdecode(arr, cv2.IMREAD_COLOR)
     except Exception as e:
+        logging.exception(f"get detect image failed with resp: {e}")
         raise ShowingException('读取图片失败')
 
     # 使用 detectMarkers 检测标记
@@ -1228,16 +1229,17 @@ def code_detect(uid, cid, module, need_valid_count=6):
                 cv2.polylines(frame, [corner_points], True, (0, 255, 0), 6)  # 绿色边框
                 green_count += 1
 
+    resp_data = {
+            'green_count': green_count,
+            'yellow_count': yellow_count,
+        }
     if green_count == need_valid_count:
-        return
+        return True, resp_data
 
     ret, buffer = cv2.imencode('.jpg', frame)
     image_bytes = buffer.tobytes()
     put_obj(image_prefix + '_result.jpg', image_bytes, 'image/jpeg')
-    raise ShowingException(json.dumps({
-        'green_count': green_count,
-        'yellow_count': yellow_count,
-    }))
+    return False, resp_data
 
 
 def finish_detect(uid, cid):
