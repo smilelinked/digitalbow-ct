@@ -11,6 +11,17 @@ from scipy.spatial.transform import Rotation
 # ----------------------------------------------------------#
 # 轨迹线函数：固定点赋予动作，得到轨迹线
 # ----------------------------------------------------------#
+def numpy_array_to_list(obj):
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif isinstance(obj, list):
+        return [numpy_array_to_list(item) for item in obj]
+    elif isinstance(obj, dict):
+        return {key: numpy_array_to_list(value) for key, value in obj.items()}
+    return obj
+# ----------------------------------------------------------#
+# 轨迹线函数：固定点赋予动作，得到轨迹线
+# ----------------------------------------------------------#
 def point_trajectory(matrix_list, point=None):
     # 如果没有点，计算矩阵角度的轨迹
     if point is None:
@@ -19,12 +30,12 @@ def point_trajectory(matrix_list, point=None):
         for i in range(len(matrix_list)):
             # 每一帧的矩阵
             matrix = np.array(matrix_list[i])
-            # 计算欧拉角
-            euler = Rotation.from_matrix(matrix[0:3, 0:3]).as_euler('xyz', degrees=True)
+            # 计算旋转四元数
+            quat = Rotation.from_matrix(matrix[0:3, 0:3]).as_quat()  # 返回四元数 [x, y, z, w]
             # 保存，3D显示用
-            angle_3d.append(euler)
-        # 平滑处理
-        angle_3d = moving_average(angle_3d)
+            angle_3d.append(quat)
+            
+        angle_3d = numpy_array_to_list(angle_3d)
 
         # 返回
         return angle_3d
