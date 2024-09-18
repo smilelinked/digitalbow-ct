@@ -1088,7 +1088,7 @@ def motion_trajectory(uid, cid, video_type, case_info, track_data=None):
     # -----------   保存数据文件    ------------ #
     #####################################################################
     # 眶耳平面下
-    track_data[0]["Angle_3D"] = angle_3d.tolist()  # 必须tolist,不然json存不了（json存不了二维数组）
+    track_data[0]["Angle_3D"] = angle_3d  # 必须tolist,不然json存不了（json存不了二维数组）
     track_data[0]["IP_3D"] = ip_3d.tolist()
     track_data[0]["LC_3D"] = lc_3d.tolist()
     track_data[0]["RC_3D"] = rc_3d.tolist()
@@ -1097,7 +1097,7 @@ def motion_trajectory(uid, cid, video_type, case_info, track_data=None):
     track_data[0]["RC_list"] = rc_list.tolist()
 
     # 鼻翼耳屏线下
-    track_data[1]["Angle_3D"] = angle_3d_tragus.tolist()
+    track_data[1]["Angle_3D"] = angle_3d_tragus
     track_data[1]["IP_3D"] = ip_3d_tragus.tolist()
     track_data[1]["LC_3D"] = lc_3d_tragus.tolist()
     track_data[1]["RC_3D"] = rc_3d_tragus.tolist()
