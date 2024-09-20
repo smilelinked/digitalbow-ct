@@ -1126,8 +1126,8 @@ def motion_renew(uid, cid):
 
         for content in resp.get('Contents'):
             key = content.get('Key')
-            if key.endswith(".mp4"):
-                motion_type = key.split("/")[-1].split(".")[0]
+            motion_type = key.split("/")[-1].split(".")[0]
+            if key.endswith(".mp4") and has_obj(f"{get_object_prefix(uid, cid)}{motion_type}.track"):
                 logging.info(f"[Motion]: {cid} renew {motion_type}")
                 motion_trajectory(uid, cid, motion_type, case_info)
 
