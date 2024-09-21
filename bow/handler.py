@@ -50,7 +50,10 @@ def async_authenticated(method):
         try:
             return await method(self, *args, **kwargs)
         except ShowingException as e:
-            self.response(e.status_code, e.content)
+            self.response(e.status_code, json.dumps({
+                'code': 100002,
+                'message': e.content,
+            }))
         except Exception as e:
             logging.exception(e)
             class_name = self.__class__.__name__
@@ -73,7 +76,10 @@ def authenticated(method):
         try:
             return method(self, *args, **kwargs)
         except ShowingException as e:
-            self.response(e.status_code, e.content)
+            self.response(e.status_code, json.dumps({
+                'code': 100002,
+                'message': e.content,
+            }))
         except Exception as e:
             logging.exception(e)
             class_name = self.__class__.__name__

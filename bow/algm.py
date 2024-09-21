@@ -1181,15 +1181,18 @@ def app_ready(uid, cid):
 
 def code_detect(uid, cid, module, need_valid_count=6):
     image_prefix = f"{get_object_prefix(uid, cid)}detect/{module}"
+    image_url = image_prefix + '.jpg'
+    if not has_obj(image_url):
+        raise ShowingException('未上传图片', 400)
     try:
-        pic_resp = generate_signed_url(image_prefix + '.jpg')
+        pic_resp = generate_signed_url(image_url)
         # TODO: try aiohttp
         resp = requests.get(pic_resp)
         arr = np.asarray(bytearray(resp.content), dtype=np.uint8)
         frame = cv2.imdecode(arr, cv2.IMREAD_COLOR)
     except Exception as e:
         logging.exception(f"get detect image failed with resp: {e}")
-        raise ShowingException('读取图片失败')
+        raise ShowingException('读取图片失败', 500)
 
     # 使用 detectMarkers 检测标记
     corners, ids, rejected = cv2.aruco.detectMarkers(
