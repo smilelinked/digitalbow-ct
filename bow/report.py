@@ -2139,9 +2139,9 @@ def custom_report(uid, cid):
     # 新建临时文件夹
     tmp_dir = tempfile.mkdtemp()
 
-    cv2.imwrite(tmp_dir + "myPage1.png", img_page1)
-    cv2.imwrite(tmp_dir + "myPage2.png", img_page2)
-    cv2.imwrite(tmp_dir + "myPage3.png", img_page3)
+    cv2.imwrite(tmp_dir + "/myPage1.png", img_page1)
+    cv2.imwrite(tmp_dir + "/myPage2.png", img_page2)
+    cv2.imwrite(tmp_dir + "/myPage3.png", img_page3)
 
     pdf_content = process_img_tmp_dir(tmp_dir)
     pdf_file = get_object_prefix(uid, cid) + 'custom_report.pdf'
