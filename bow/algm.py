@@ -1253,10 +1253,10 @@ def modify_information(uid, cid, entries):
     information = get_information_json(uid, cid)
 
     # 判断传入的键是否合法
-    allowed_keys = set(information.keys())
-    actual_keys = set(entries.keys())
-    if not actual_keys.issubset(allowed_keys):
-        raise Exception(f"allowed modified keys are {allowed_keys} but actual keys are {actual_keys}")
+    # allowed_keys = set(information.keys())
+    # actual_keys = set(entries.keys())
+    # if not actual_keys.issubset(allowed_keys):
+    #     raise Exception(f"allowed modified keys are {allowed_keys} but actual keys are {actual_keys}")
 
     information.update(entries)
 
