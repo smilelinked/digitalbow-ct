@@ -75,8 +75,9 @@ def write_pose(uid, cid, moving_object_list, moving_list, fixed_list):
 
     angle_op = case_info["angle_OP"]
 
-    rigid_tf = rigid_transformation(uid, cid, moving_object_list, moving_list, fixed_list)
-    jaw_splint_pose = np.reshape(rigid_tf, (4, 4))
+    plate_tf = case_info["plate_tf"]
+    # rigid_tf = rigid_transformation(uid, cid, moving_object_list, moving_list, fixed_list)
+    jaw_splint_pose = np.reshape(plate_tf, (4, 4))
 
     gap = [0, -2, 2]
     up_f = jaw_splint_pose[0:3, 0:3] @ [0, -2 + 5.8, 0] + gap
