@@ -182,15 +182,8 @@ class WritePoseHandler(BaseHandler):
         post_body = self.request.body
         if not post_body:
             return self.write(ErrMissingParam)
-
-        post_data = json.loads(post_body.decode('utf-8'))
-
-        moving_object_list = post_data.get("moving_object_list")
-        moving_list = post_data.get("moving_list")
-        fixed_list = post_data.get("fixed_list")
-
-        data = write_pose(self._current_user, cid, moving_object_list, moving_list, fixed_list)
-        self.write({"code": 200, "message": "成功", "data": data})
+        write_pose(self._current_user, cid)
+        self.write({"code": 200, "message": "成功", "data": []})
 
 
 class StableConnectHandler(tornado.websocket.WebSocketHandler):
