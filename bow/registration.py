@@ -70,13 +70,12 @@ def rigid_transformation(uid, cid, moving_object_list, moving_list, fixed_list):
     return transformation_array
 
 
-def write_pose(uid, cid, moving_object_list, moving_list, fixed_list):
+def write_pose(uid, cid):
     case_info = get_information_json(uid, cid)
 
     angle_op = case_info["angle_OP"]
-
     plate_tf = case_info["plate_tf"]
-    # rigid_tf = rigid_transformation(uid, cid, moving_object_list, moving_list, fixed_list)
+
     jaw_splint_pose = np.reshape(plate_tf, (4, 4))
 
     gap = [0, -2, 2]
@@ -100,7 +99,5 @@ def write_pose(uid, cid, moving_object_list, moving_list, fixed_list):
     # 存储
     case_info.update(pose_info)
     put_information_json(uid, cid, case_info)
-
+    # obs标记，方便前端跳转
     put_obj(get_object_prefix(uid, cid) + "pose.pckl")
-
-    return rigid_tf.tolist()
