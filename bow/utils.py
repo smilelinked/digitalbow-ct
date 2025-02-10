@@ -20,6 +20,79 @@ def numpy_array_to_list(obj):
         return {key: numpy_array_to_list(value) for key, value in obj.items()}
     return obj
 # ----------------------------------------------------------#
+# 计算两组点（每组3个点）之间的变换矩阵、旋转四元数（w,x,y,z）以及平移参数
+# ----------------------------------------------------------#
+def calculate_per_quaternion(points1, points2):
+    # 确保输入是numpy数组
+    points1 = np.array(points1)
+    points2 = np.array(points2)
+    # 计算质心
+    centroid1 = np.mean(points1, axis=0)
+    centroid2 = np.mean(points2, axis=0)
+    # 将点集移到质心
+    centered1 = points1 - centroid1
+    centered2 = points2 - centroid2
+    # 计算协方差矩阵
+    H = centered1.T @ centered2
+    # SVD分解
+    U, S, Vt = np.linalg.svd(H)
+    # 构建旋转矩阵
+    R = Vt.T @ U.T
+    # 检查是否需要修正旋转矩阵（确保是右手坐标系）
+    if np.linalg.det(R) < 0:
+        Vt[-1, :] *= -1
+        R = Vt.T @ U.T
+    # 计算平移向量
+    t = centroid2 - R @ centroid1
+    # 构建完整的变换矩阵
+    transform_matrix = np.eye(4)
+    transform_matrix[:3, :3] = R
+    transform_matrix[:3, 3] = t
+    # 计算四元数
+    trace = np.trace(R)
+    if trace > 0:
+        S = np.sqrt(trace + 1.0) * 2
+        w = 0.25 * S
+        x = (R[2, 1] - R[1, 2]) / S
+        y = (R[0, 2] - R[2, 0]) / S
+        z = (R[1, 0] - R[0, 1]) / S
+    else:
+        if R[0, 0] > R[1, 1] and R[0, 0] > R[2, 2]:
+            S = np.sqrt(1.0 + R[0, 0] - R[1, 1] - R[2, 2]) * 2
+            w = (R[2, 1] - R[1, 2]) / S
+            x = 0.25 * S
+            y = (R[0, 1] + R[1, 0]) / S
+            z = (R[0, 2] + R[2, 0]) / S
+        elif R[1, 1] > R[2, 2]:
+            S = np.sqrt(1.0 + R[1, 1] - R[0, 0] - R[2, 2]) * 2
+            w = (R[0, 2] - R[2, 0]) / S
+            x = (R[0, 1] + R[1, 0]) / S
+            y = 0.25 * S
+            z = (R[1, 2] + R[2, 1]) / S
+        else:
+            S = np.sqrt(1.0 + R[2, 2] - R[0, 0] - R[1, 1]) * 2
+            w = (R[1, 0] - R[0, 1]) / S
+            x = (R[0, 2] + R[2, 0]) / S
+            y = (R[1, 2] + R[2, 1]) / S
+            z = 0.25 * S
+    quaternion = np.array([w, x, y, z])
+    quaternion = quaternion / np.linalg.norm(quaternion)
+
+    return transform_matrix, quaternion, t
+
+def calculate_all_quaternion(ip_3d, lc_3d, rc_3d):
+    angles_3d = []
+    for i in range(1, len(ip_3d)):
+        # 计算第一帧和当前帧的变换
+        point_o = np.array([0, 0, 0])
+        per_points = np.array([point_o, lc_3d[0] - ip_3d[0], rc_3d[0] - ip_3d[0]])
+        current_points = np.array([point_o, lc_3d[i] -ip_3d[i], rc_3d[i] - ip_3d[i]])
+        transform_matrix, quaternion, translation = calculate_per_quaternion(per_points, current_points)# 四元数、位移
+        angle_3d = quaternion.tolist()
+        angles_3d.append(angle_3d)
+
+    return angles_3d
+# ----------------------------------------------------------#
 # 轨迹线函数：固定点赋予动作，得到轨迹线
 # ----------------------------------------------------------#
 def point_trajectory(matrix_list, point=None):
