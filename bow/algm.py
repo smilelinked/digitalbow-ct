@@ -22,7 +22,8 @@ from bow.utils import (calculate_pose_matrix,
                        moving_average,
                        filter_close_points,
                        coincident_point,
-                       point_trajectory
+                       point_trajectory,
+                       calculate_all_quaternion
                        )
 
 DEFAULT_CALIBRATION_PKL = 'digitalbow/calibration/nova10/calibration.pckl'
@@ -1073,16 +1074,20 @@ def motion_trajectory(uid, cid, video_type, case_info, track_data=None):
     matrix_list_tragus = track_data[1]["Matrix_list"]
 
     # ********************     眶耳平面,  F坐标系    ******************** #
-    angle_3d = point_trajectory(matrix_list)
+    # angle_3d = point_trajectory(matrix_list)
     ip_3d, ip_list = point_trajectory(matrix_list, ip)
     lc_3d, lc_list = point_trajectory(matrix_list, lc)
     rc_3d, rc_list = point_trajectory(matrix_list, rc)
+    # 四元数由ip_3d、lc_3d、rc_3d重新计算
+    angle_3d = calculate_all_quaternion(ip_3d, lc_3d, rc_3d)
 
     # ********************     鼻翼耳屏线,  T坐标系    ******************** #
-    angle_3d_tragus = point_trajectory(matrix_list_tragus)
+    # angle_3d_tragus = point_trajectory(matrix_list_tragus)
     ip_3d_tragus, ip_list_tragus = point_trajectory(matrix_list_tragus, ip)
     lc_3d_tragus, lc_list_tragus = point_trajectory(matrix_list_tragus, lc)
     rc_3d_tragus, rc_list_tragus = point_trajectory(matrix_list_tragus, rc)
+    # 四元数由ip_3d_tragus、lc_3d_tragus、rc_3d_tragus重新计算
+    angle_3d_tragus = calculate_all_quaternion(ip_3d_tragus, lc_3d_tragus, rc_3d_tragus)
 
     #####################################################################
     # -----------   保存数据文件    ------------ #
