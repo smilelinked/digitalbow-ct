@@ -1,20 +1,27 @@
 import os
 import boto3
 from botocore.exceptions import ClientError
+from botocore.client import Config
 
-bucket = os.getenv("BUCKET", "smilelink")
+bucket = os.getenv("BUCKET", "teethlinkdev")
+
+config = Config(
+    s3={'addressing_style': 'virtual'},
+)
 
 s3_client = boto3.client('s3',
-                         aws_access_key_id=os.getenv('OBS_AK', 'NCZPQASHJNW2URNGB9SI'),
-                         aws_secret_access_key=os.getenv('OBS_SK', 'lXLZ9J1yUJYMrUBYZX2oAmzc3uvbSEIOSckpEsvN'),
-                         endpoint_url=os.getenv('OBS_URI', 'https://obs.cn-east-3.myhuaweicloud.com'))
+                         aws_access_key_id=os.getenv('OBS_AK', ''),
+                         aws_secret_access_key=os.getenv('OBS_SK', ''),
+                         endpoint_url=os.getenv('OBS_URI', 'https://oss-cn-hangzhou.aliyuncs.com'),
+                         config=config)
 
 
 def new_client():
     return boto3.client('s3',
-                        aws_access_key_id=os.getenv('OBS_AK', 'NCZPQASHJNW2URNGB9SI'),
-                        aws_secret_access_key=os.getenv('OBS_SK', 'lXLZ9J1yUJYMrUBYZX2oAmzc3uvbSEIOSckpEsvN'),
-                        endpoint_url=os.getenv('OBS_URI', 'https://obs.cn-east-3.myhuaweicloud.com'))
+                        aws_access_key_id=os.getenv('OBS_AK', ''),
+                        aws_secret_access_key=os.getenv('OBS_SK', ''),
+                        endpoint_url=os.getenv('OBS_URI', 'https://oss-cn-hangzhou.aliyuncs.com'),
+                        config=config)
 
 
 def get_obj(file):
