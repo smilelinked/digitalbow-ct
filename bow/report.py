@@ -68,6 +68,10 @@ def get_jaw_motion_json(object_prefix, case_info):
                     elif case_info["reference"] == "ala-tragus":
                         jaw_motion[motion_type] = temple[1]
 
+                # 计算 pin_list 并添加到 jaw_motion
+                if "pin_3d" in case_info:
+                    _, pin_list = point_trajectory(temple[0]["Matrix_list"], case_info["pin_3d"])
+                    jaw_motion[motion_type]["pin_list"] = np.array(pin_list).tolist()
     return jaw_motion_frankfurt, jaw_motion
 
 
@@ -454,8 +458,8 @@ def matrix_pin(uid, cid):
     # *************** 读病例信息文件
     case_info = get_information_json(uid, cid)
 
-    if case_info.get("Matrix_Pin_Processed"):
-        return case_info
+    # if case_info.get("Matrix_Pin_Processed"):
+    #     return case_info
 
     # *************** 获得初始数据
     bp = case_info["BP"]
@@ -584,6 +588,51 @@ def matrix_pin(uid, cid):
     #####################################################################
     # -----------     Pin: 计算合架切道针的轨迹线     ------------ #
     #####################################################################
+    # 输入数据
+    bp = case_info["BP"] + np.array([0, -3, 0])
+    lp = case_info["LP"] + np.array([0, -3, 0])
+    rp = case_info["RP"] + np.array([0, -3, 0])
+    # 读取颌板吸附到CT上的变换矩阵
+    jawSplint_pose = case_info["jawSplint_pose"]
+    bp_b = np.dot(jawSplint_pose, np.append(bp, 1))[:3]
+    lp_b = np.dot(jawSplint_pose, np.append(lp, 1))[:3]
+    rp_b = np.dot(jawSplint_pose, np.append(rp, 1))[:3]
+    # 微调颌板
+    angle_op = case_info["angle_OP"]
+    plat_matrix = rotation_platform(lp_b, rp_b, bp_b, angle_op)
+    # 应用颌板旋转于髁突点
+    lc = case_info["LC"]
+    rc = case_info["RC"]
+    lc = np.array(lc)
+    rc = np.array(rc)
+    lc = np.dot(plat_matrix, np.append(lc, 1))[:3]
+    rc = np.dot(plat_matrix, np.append(rc, 1))[:3]
+    condyle = case_info["articulator"]["condyle"]
+    l_condyle = np.array([condyle[0], condyle[1], condyle[2]])
+    r_condyle = np.array([-condyle[0], condyle[1], condyle[2]])
+    # 计算髁突点与颌架的对齐矩阵
+    align_matrix = align_condyle(l_condyle, r_condyle, lc, rc)
+    combine_matrix = np.linalg.multi_dot([align_matrix, plat_matrix, jawSplint_pose])
+    pin_matrix = np.dot(align_matrix, plat_matrix)
+    # 不同的参考平面, 计算方式不同
+    # 计算颌架设定角度旋转与位移
+    angle_articulator = case_info["articulator"]["angle"]
+    if case_info["reference"] == "frankfurt":
+        if angle_op > angle_articulator:
+            articulator_matrix = rotation_axis(lc, rc, angle=-angle_articulator)
+            combine_matrix = np.dot(articulator_matrix, combine_matrix)
+            pin_matrix = np.dot(articulator_matrix, pin_matrix)
+    elif case_info["reference"] == "ala-tragus":
+        articulator_matrix = rotation_axis(lc, rc, angle=-angle_op)
+        combine_matrix = np.dot(articulator_matrix, combine_matrix)
+        pin_matrix = np.dot(articulator_matrix, pin_matrix)
+    case_info["combine_matrix"] = combine_matrix.tolist()
+    # 求逆
+    pin = case_info["articulator"]["pin"]
+    pin_matrix = np.linalg.inv(pin_matrix)
+    pin_3d = np.dot(pin_matrix, np.append(pin, 1))[:3]
+    case_info["pin_3d"] = pin_3d.tolist()
+
     resp = list_objects(get_object_prefix(uid, cid) + 'standard')
     print(f"resp: {resp}")
     if resp.get('ResponseMetadata').get('HTTPStatusCode') < 300 and resp.get('Contents') is not None:
@@ -593,13 +642,9 @@ def matrix_pin(uid, cid):
                 track_data = json.loads(get_obj_exception(key).read())
 
                 # pin点的轨迹线,  眶耳平面,  F坐标系
-                _, pin_list = point_trajectory(track_data[0]["Matrix_list"], articulator["pin"])
+                _, pin_list = point_trajectory(track_data[0]["Matrix_list"], pin_3d)
                 # pin点的轨迹线,  鼻翼耳屏线,  T坐标系
-                _, pin_list_tragus = point_trajectory(track_data[1]["Matrix_list"], articulator["pin"])
-
-                # 保存数据
-                track_data[0]["pin_list"] = pin_list.tolist()
-                track_data[1]["pin_list"] = pin_list_tragus.tolist()
+                _, pin_list_tragus = point_trajectory(track_data[1]["Matrix_list"], pin_3d)
                 put_json(key, track_data)
 
     #####################################################################
@@ -663,27 +708,27 @@ def get_motion_info(jaw_motion):
     #####################################################################
     # -----------    需要记录的17个峰值点  ------------ #
     #####################################################################
-    left_ip_xy_peak_index = []
-    left_rc_xz_peak_index = []
-    left_lc_xz_peak_index = []
-    left_pin_xy_peak_index = []  # 特殊处理，左侧角度要从合架切导针pin点去算角度，而不是IP点
+    left_ip_xz_peak_index = []
+    left_rc_xy_peak_index = []
+    left_lc_xy_peak_index = []
+    left_pin_xz_peak_index = []  # 特殊处理，左侧角度要从合架切导针pin点去算角度，而不是IP点
 
-    right_ip_xy_peak_index = []
-    right_rc_xz_peak_index = []
-    right_lc_xz_peak_index = []
-    right_pin_xy_peak_index = []  # 特殊处理，右侧角度要从合架切导针pin点去算角度，而不是IP点
+    right_ip_xz_peak_index = []
+    right_rc_xy_peak_index = []
+    right_lc_xy_peak_index = []
+    right_pin_xz_peak_index = []  # 特殊处理，右侧角度要从合架切导针pin点去算角度，而不是IP点
 
-    forward_ip_zy_peak_index = []
-    forward_rc_xz_peak_index = []
-    forward_lc_xz_peak_index = []
-    forward_rc_zy_peak_index = []
-    forward_lc_zy_peak_index = []
-    forward_pin_zy_peak_index = []  # 特殊处理，前伸角度要从合架切导针pin点去算角度，而不是IP点
+    forward_ip_yz_peak_index = []
+    forward_rc_xy_peak_index = []
+    forward_lc_xy_peak_index = []
+    forward_rc_yz_peak_index = []
+    forward_lc_yz_peak_index = []
+    forward_pin_yz_peak_index = []  # 特殊处理，前伸角度要从合架切导针pin点去算角度，而不是IP点
 
-    backward_ip_zy_peak_index = []
+    backward_ip_yz_peak_index = []
 
-    maxopen_ip_xy_peak_index = []
-    maxopen_ip_zy_peak_index = []
+    maxopen_ip_xz_peak_index = []
+    maxopen_ip_yz_peak_index = []
 
     #####################################################################
     # -----------   计算运动轨迹的角度和长度   ------------ #
@@ -701,157 +746,273 @@ def get_motion_info(jaw_motion):
 
         # 计算峰值
         if motion_type == "standard_left":
-            left_ip_xy_peak_index = find_peak_index(ip_list[:, 0], ip_list[:, 1], 1)
-            left_rc_xz_peak_index = find_peak_index(rc_list[:, 0], rc_list[:, 2], 2)
-            left_lc_xz_peak_index = find_peak_index(lc_list[:, 0], lc_list[:, 2], 1)
-            left_pin_xy_peak_index = find_peak_index(pin_list[:, 0], pin_list[:, 1], 1)
+            left_ip_xz_peak_index = find_peak_index(ip_list[:, 0], ip_list[:, 2], 1)
+            left_rc_xy_peak_index = find_peak_index(rc_list[:, 0], rc_list[:, 1], 2)
+            left_lc_xy_peak_index = find_peak_index(lc_list[:, 0], lc_list[:, 1], 1)
+            left_pin_xz_peak_index = find_peak_index(pin_list[:, 0], pin_list[:, 2], 1)
 
         elif motion_type == "standard_right":
-            right_ip_xy_peak_index = find_peak_index(ip_list[:, 0], ip_list[:, 1], 1)
-            right_rc_xz_peak_index = find_peak_index(rc_list[:, 0], rc_list[:, 2], 1)
-            right_lc_xz_peak_index = find_peak_index(lc_list[:, 0], lc_list[:, 2], 2)
-            right_pin_xy_peak_index = find_peak_index(pin_list[:, 0], pin_list[:, 1], 1)
+            right_ip_xz_peak_index = find_peak_index(ip_list[:, 0], ip_list[:, 2], 1)
+            right_rc_xy_peak_index = find_peak_index(rc_list[:, 0], rc_list[:, 1], 1)
+            right_lc_xy_peak_index = find_peak_index(lc_list[:, 0], lc_list[:, 1], 2)
+            right_pin_xz_peak_index = find_peak_index(pin_list[:, 0], pin_list[:, 2], 1)
 
         elif motion_type == "standard_forward":
-            forward_ip_zy_peak_index = find_peak_index(ip_list[:, 1], ip_list[:, 2], 2)
-            forward_rc_xz_peak_index = find_peak_index(rc_list[:, 0], rc_list[:, 2], 2)
-            forward_lc_xz_peak_index = find_peak_index(lc_list[:, 0], lc_list[:, 2], 2)
-            forward_pin_zy_peak_index = find_peak_index(pin_list[:, 1], pin_list[:, 2], 2)
+            forward_ip_yz_peak_index = find_peak_index(ip_list[:, 1], ip_list[:, 2], 1)
+            forward_rc_xy_peak_index = find_peak_index(rc_list[:, 0], rc_list[:, 1], 2)
+            forward_lc_xy_peak_index = find_peak_index(lc_list[:, 0], lc_list[:, 1], 2)
+            forward_pin_yz_peak_index = find_peak_index(pin_list[:, 1], pin_list[:, 2], 1)
 
-            forward_rc_zy_peak_index = find_peak_index(rc_list[:, 1], rc_list[:, 2], 2)
-            forward_lc_zy_peak_index = find_peak_index(lc_list[:, 1], lc_list[:, 2], 2)
+            forward_rc_yz_peak_index = find_peak_index(rc_list[:, 1], rc_list[:, 2], 2)
+            forward_lc_yz_peak_index = find_peak_index(lc_list[:, 1], lc_list[:, 2], 2)
 
         elif motion_type == "standard_backward":
-            backward_ip_zy_peak_index = find_peak_index(ip_list[:, 1], ip_list[:, 2], 2)
+            backward_ip_yz_peak_index = find_peak_index(ip_list[:, 1], ip_list[:, 2], 1)
 
         elif motion_type == "standard_maxopen":
-            maxopen_ip_xy_peak_index = find_peak_index(ip_list[:, 0], ip_list[:, 1], 2)
-            maxopen_ip_zy_peak_index = find_peak_index(ip_list[:, 1], ip_list[:, 2], 1)
+            maxopen_ip_xz_peak_index = find_peak_index(ip_list[:, 0], ip_list[:, 2], 2)
+            maxopen_ip_yz_peak_index = find_peak_index(ip_list[:, 1], ip_list[:, 2], 2)
 
     # ********************  计算角度和长度, 并绘制图像  ******************** #
     # left运动存在
-    if left_ip_xy_peak_index:
+    if left_ip_xz_peak_index:
         # 左侧方运动，角度
         # x = math.fabs(jawMotion["standard_left"]["IP_list"][left_ip_xy_peak_index][0])
         # y = math.fabs(jawMotion["standard_left"]["IP_list"][left_ip_xy_peak_index][1])
         # motion_info["left_angle"] = math.atan(y / x) * 180 / math.pi
 
         # 特殊处理，左侧角度要从合架切导针pin点去算角度，而不是IP点
-        x = math.fabs(jaw_motion["standard_left"]["pin_list"][left_pin_xy_peak_index][0])
-        y = math.fabs(jaw_motion["standard_left"]["pin_list"][left_pin_xy_peak_index][1])
-        info["left_angle"] = math.atan(y / x) * 180 / math.pi
+        x = math.fabs(jaw_motion["standard_left"]["pin_list"][left_pin_xz_peak_index][0])
+        z = math.fabs(jaw_motion["standard_left"]["pin_list"][left_pin_xz_peak_index][2])
+        info["left_angle"] = math.atan(z / x) * 180 / math.pi
 
         # 左侧方运动，瞬时侧移距离iss
         info["left_bennett_shift_length"] = math.fabs(
-            jaw_motion["standard_left"]["LC_list"][left_lc_xz_peak_index][0])
+            jaw_motion["standard_left"]["LC_list"][left_lc_xy_peak_index][0])
 
     # right运动存在
-    if right_ip_xy_peak_index:
+    if right_ip_xz_peak_index:
         # 右侧方运动，角度
         # x = math.fabs(jawMotion["standard_right"]["IP_list"][right_ip_xy_peak_index][0])
         # y = math.fabs(jawMotion["standard_right"]["IP_list"][right_ip_xy_peak_index][1])
         # motion_info["right_angle"] = math.atan(y / x) * 180 / math.pi
 
         # 特殊处理，右侧角度要从合架切导针的角度去算角度，而不是IP点
-        x = math.fabs(jaw_motion["standard_right"]["pin_list"][right_pin_xy_peak_index][0])
-        y = math.fabs(jaw_motion["standard_right"]["pin_list"][right_pin_xy_peak_index][1])
-        info["right_angle"] = math.atan(y / x) * 180 / math.pi
+        x = math.fabs(jaw_motion["standard_right"]["pin_list"][right_pin_xz_peak_index][0])
+        z = math.fabs(jaw_motion["standard_right"]["pin_list"][right_pin_xz_peak_index][2])
+        info["right_angle"] = math.atan(z / x) * 180 / math.pi
 
         # 右侧方运动，瞬时侧移距离
         info["right_bennett_shift_length"] = math.fabs(
-            jaw_motion["standard_right"]["RC_list"][right_rc_xz_peak_index][0])
+            jaw_motion["standard_right"]["RC_list"][right_rc_xy_peak_index][0])
 
     # forward运动存在
-    if forward_ip_zy_peak_index:
+    if forward_ip_yz_peak_index:
         # 前伸运动，角度
         # y = math.fabs(jawMotion["standard_forward"]["IP_list"][forward_ip_zy_peak_index][1])
         # z = math.fabs(jawMotion["standard_forward"]["IP_list"][forward_ip_zy_peak_index][2])
         # motion_info["forward_angle"] = math.atan(y / z) * 180 / math.pi
 
         # 特殊处理，前伸角度要从合架切导针的角度去算角度，而不是IP点
-        y = math.fabs(jaw_motion["standard_forward"]["pin_list"][forward_pin_zy_peak_index][1])
-        z = math.fabs(jaw_motion["standard_forward"]["pin_list"][forward_pin_zy_peak_index][2])
-        info["forward_angle"] = math.atan(y / z) * 180 / math.pi
+        y = math.fabs(jaw_motion["standard_forward"]["pin_list"][forward_pin_yz_peak_index][1])
+        z = math.fabs(jaw_motion["standard_forward"]["pin_list"][forward_pin_yz_peak_index][2])
+        info["forward_angle"] = math.atan(z / y) * 180 / math.pi
 
         # 前伸运动，右髁道斜度
-        y = math.fabs(jaw_motion["standard_forward"]["RC_list"][forward_rc_zy_peak_index][1])
-        z = math.fabs(jaw_motion["standard_forward"]["RC_list"][forward_rc_zy_peak_index][2])
-        info["rc_forward_angle"] = math.atan(y / z) * 180 / math.pi
+        y = math.fabs(jaw_motion["standard_forward"]["RC_list"][forward_rc_yz_peak_index][1])
+        z = math.fabs(jaw_motion["standard_forward"]["RC_list"][forward_rc_yz_peak_index][2])
+        info["rc_forward_angle"] = math.atan(z / y) * 180 / math.pi
 
         # 前伸运动，左髁道斜度
-        y = math.fabs(jaw_motion["standard_forward"]["LC_list"][forward_lc_zy_peak_index][1])
-        z = math.fabs(jaw_motion["standard_forward"]["LC_list"][forward_lc_zy_peak_index][2])
-        info["lc_forward_angle"] = math.atan(y / z) * 180 / math.pi
+        y = math.fabs(jaw_motion["standard_forward"]["LC_list"][forward_lc_yz_peak_index][1])
+        z = math.fabs(jaw_motion["standard_forward"]["LC_list"][forward_lc_yz_peak_index][2])
+        info["lc_forward_angle"] = math.atan(z / y) * 180 / math.pi
 
     # backward运动存在
-    if backward_ip_zy_peak_index:
+    if backward_ip_yz_peak_index:
         # 后退运动，距离
         info["backward_length"] = math.fabs(
-            jaw_motion["standard_backward"]["IP_list"][backward_ip_zy_peak_index][2])
+            jaw_motion["standard_backward"]["IP_list"][backward_ip_yz_peak_index][2])
 
     # maxopen运动存在
-    if maxopen_ip_xy_peak_index:
+    if maxopen_ip_xz_peak_index:
         # 最大开口运动，角度
-        x = math.fabs(jaw_motion["standard_maxopen"]["IP_list"][maxopen_ip_xy_peak_index][0])
-        y = math.fabs(jaw_motion["standard_maxopen"]["IP_list"][maxopen_ip_xy_peak_index][1])
-        info["maxopen_angle"] = math.atan(x / y) * 180 / math.pi
+        x = math.fabs(jaw_motion["standard_maxopen"]["IP_list"][maxopen_ip_xz_peak_index][0])
+        z = math.fabs(jaw_motion["standard_maxopen"]["IP_list"][maxopen_ip_xz_peak_index][2])
+        info["maxopen_angle"] = math.atan(x / z) * 180 / math.pi
 
         # 最大开口运动，开口距离
-        y = math.fabs(jaw_motion["standard_maxopen"]["IP_list"][maxopen_ip_zy_peak_index][1])
-        z = math.fabs(jaw_motion["standard_maxopen"]["IP_list"][maxopen_ip_zy_peak_index][2])
+        y = math.fabs(jaw_motion["standard_maxopen"]["IP_list"][maxopen_ip_yz_peak_index][1])
+        z = math.fabs(jaw_motion["standard_maxopen"]["IP_list"][maxopen_ip_yz_peak_index][2])
         info["maxopen_length"] = pow(pow(y, 2) + pow(z, 2), 0.5)
 
     # 左侧方运动，前伸运动，同时存在
-    if left_rc_xz_peak_index and forward_rc_xz_peak_index:
+    if left_rc_xy_peak_index and forward_rc_xy_peak_index:
         # 右贝内特角
-        x = math.fabs(jaw_motion["standard_left"]["RC_list"][left_rc_xz_peak_index][0])
-        z = math.fabs(jaw_motion["standard_left"]["RC_list"][left_rc_xz_peak_index][2])
-        theta1 = math.atan(x / z) * 180 / math.pi
+        x = math.fabs(jaw_motion["standard_left"]["RC_list"][left_rc_xy_peak_index][0])
+        y = math.fabs(jaw_motion["standard_left"]["RC_list"][left_rc_xy_peak_index][1])
+        theta1 = math.atan(x / y) * 180 / math.pi
 
-        x = math.fabs(jaw_motion["standard_forward"]["RC_list"][forward_rc_xz_peak_index][0])
-        z = math.fabs(jaw_motion["standard_forward"]["RC_list"][forward_rc_xz_peak_index][2])
-        theta2 = math.atan(x / z) * 180 / math.pi
+        x = math.fabs(jaw_motion["standard_forward"]["RC_list"][forward_rc_xy_peak_index][0])
+        y = math.fabs(jaw_motion["standard_forward"]["RC_list"][forward_rc_xy_peak_index][1])
+        theta2 = math.atan(x / y) * 180 / math.pi
 
-        if (jaw_motion["standard_left"]["RC_list"][left_rc_xz_peak_index][0] *
-            jaw_motion["standard_forward"]["RC_list"][forward_rc_xz_peak_index][0]) > 0:
+        if (jaw_motion["standard_left"]["RC_list"][left_rc_xy_peak_index][0] *
+            jaw_motion["standard_forward"]["RC_list"][forward_rc_xy_peak_index][0]) > 0:
             info["right_bennett_angle"] = math.fabs(theta1 - theta2)
         else:
             info["right_bennett_angle"] = theta1 + theta2
 
     # 右侧方运动，前伸运动，同时存在
-    if right_lc_xz_peak_index and forward_lc_xz_peak_index:
+    if right_lc_xy_peak_index and forward_lc_xy_peak_index:
         #  左贝内特角
-        x = math.fabs(jaw_motion["standard_right"]["LC_list"][right_lc_xz_peak_index][0])
-        z = math.fabs(jaw_motion["standard_right"]["LC_list"][right_lc_xz_peak_index][2])
-        theta1 = math.atan(x / z) * 180 / math.pi
+        x = math.fabs(jaw_motion["standard_right"]["LC_list"][right_lc_xy_peak_index][0])
+        y = math.fabs(jaw_motion["standard_right"]["LC_list"][right_lc_xy_peak_index][1])
+        theta1 = math.atan(x / y) * 180 / math.pi
 
-        x = math.fabs(jaw_motion["standard_forward"]["LC_list"][forward_lc_xz_peak_index][0])
-        z = math.fabs(jaw_motion["standard_forward"]["LC_list"][forward_lc_xz_peak_index][2])
-        theta2 = math.atan(x / z) * 180 / math.pi
+        x = math.fabs(jaw_motion["standard_forward"]["LC_list"][forward_lc_xy_peak_index][0])
+        y = math.fabs(jaw_motion["standard_forward"]["LC_list"][forward_lc_xy_peak_index][1])
+        theta2 = math.atan(x / y) * 180 / math.pi
 
-        if (jaw_motion["standard_right"]["LC_list"][right_lc_xz_peak_index][0] *
-            jaw_motion["standard_forward"]["LC_list"][forward_lc_xz_peak_index][0]) > 0:
+        if (jaw_motion["standard_right"]["LC_list"][right_lc_xy_peak_index][0] *
+            jaw_motion["standard_forward"]["LC_list"][forward_lc_xy_peak_index][0]) > 0:
             info["left_bennett_angle"] = math.fabs(theta1 - theta2)
         else:
             info["left_bennett_angle"] = theta1 + theta2
 
     return info
 
+def rotation_axis(lc, rc, angle=30):
+    # 定义旋转轴与旋转中心
+    rotation_center = np.mean([lc, rc], axis=0)
+    axis = lc - rc  # 右肩看向左肩，顺时针旋转为正，逆时针旋转为负
+    axis = axis / np.linalg.norm(axis)  # 归一化旋转轴
+    # 转换角度为弧度
+    angle_rad = np.radians(angle)
+    # 使用罗德里格斯公式计算旋转矩阵
+    K = np.array([
+        [0, -axis[2], axis[1]],
+        [axis[2], 0, -axis[0]],
+        [-axis[1], axis[0], 0]
+    ])
+    R = np.eye(3) + np.sin(angle_rad) * K + (1 - np.cos(angle_rad)) * np.dot(K, K)
+    # 构建包含平移的4x4变换矩阵
+    transform_matrix = np.eye(4)
+    transform_matrix[:3, :3] = R
+    # 计算平移部分：先将点移到原点，旋转后再移回
+    t = rotation_center - np.dot(R, rotation_center)
+    transform_matrix[:3, 3] = t
+
+    return transform_matrix
+
+def align_condyle(lp, rp, lc, rc):
+    # 对齐髁突点
+    refer_dir = rp - lp
+    align_dir = rc - lc
+    refer_dir_norm = refer_dir / np.linalg.norm(refer_dir)
+    align_dir_norm = align_dir / np.linalg.norm(align_dir)
+
+    # 计算旋转轴和角度
+    rotation_axis = np.cross(align_dir_norm, refer_dir_norm)
+    rotation_axis = rotation_axis / np.linalg.norm(rotation_axis)
+    cos_theta = np.dot(align_dir_norm, refer_dir_norm)
+    sin_theta = np.linalg.norm(np.cross(align_dir_norm, refer_dir_norm))
+    theta = np.arctan2(sin_theta, cos_theta)
+
+    # 构建旋转矩阵（罗德里格斯公式）
+    K = np.array([
+        [0, -rotation_axis[2], rotation_axis[1]],
+        [rotation_axis[2], 0, -rotation_axis[0]],
+        [-rotation_axis[1], rotation_axis[0], 0]
+    ])
+    R = np.eye(3) + np.sin(theta) * K + (1 - np.cos(theta)) * np.dot(K, K)
+
+    # 计算平移
+    mid_p = np.mean([lp, rp], axis=0)
+    mid_c = np.mean([lc, rc], axis=0)
+    t = mid_p - np.dot(R, mid_c)
+
+    # 构建4x4变换矩阵
+    transform_matrix = np.eye(4)
+    transform_matrix[:3, :3] = R
+    transform_matrix[:3, 3] = t
+
+    return transform_matrix
+
+def rotation_platform(lp_b, rp_b, bp_b, angle_op):
+    # 拟合平面并计算法向量
+    v1 = lp_b - bp_b
+    v2 = rp_b - bp_b
+    # 计算法向量（叉积）
+    plane_normal = np.cross(v1, v2)
+    plane_normal = plane_normal / np.linalg.norm(plane_normal)
+    if plane_normal[2] < 0:
+        plane_normal = -plane_normal
+
+    # 创建绕x轴旋转的矩阵
+    angle_rad = np.radians(angle_op)
+    Rx = np.array([
+        [1, 0, 0],
+        [0, np.cos(angle_rad), -np.sin(angle_rad)],
+        [0, np.sin(angle_rad), np.cos(angle_rad)]
+    ])
+
+    # 计算旋转后的目标方向
+    direction_OP = np.array([0, 0, 1])
+    direction_OP = np.dot(Rx, direction_OP)
+
+    # 计算从plane_normal旋转到direction_OP的旋转矩阵
+    rotation_axis = np.cross(plane_normal, direction_OP)
+    if np.allclose(rotation_axis, 0):
+        if np.dot(plane_normal, direction_OP) > 0:
+            R = np.eye(3)
+        else:
+            R = -np.eye(3)
+    else:
+        rotation_axis = rotation_axis / np.linalg.norm(rotation_axis)
+        cos_theta = np.clip(np.dot(plane_normal, direction_OP), -1.0, 1.0)
+        sin_theta = np.sqrt(1 - cos_theta ** 2)
+
+        # 罗德里格斯公式
+        K = np.array([
+            [0, -rotation_axis[2], rotation_axis[1]],
+            [rotation_axis[2], 0, -rotation_axis[0]],
+            [-rotation_axis[1], rotation_axis[0], 0]
+        ])
+        R = np.eye(3) + sin_theta * K + (1 - cos_theta) * np.dot(K, K)
+
+    # 计算旋转中心和平移
+    center = np.mean([lp_b, rp_b], axis=0)
+    t = center - np.dot(R, center)
+
+    # 构建4x4变换矩阵
+    transform_matrix = np.eye(4)
+    transform_matrix[:3, :3] = R
+    transform_matrix[:3, 3] = t
+
+    return transform_matrix
 
 def get_platform_info(case_info):
-    # 输入数据
-    bp = case_info["BP"]
-    lp = case_info["LP"]
-    rp = case_info["RP"]
-    transform_ap = []
-    # 不同的参考平面, 计算方式不同
-    if case_info["reference"] == "frankfurt":
-        transform_ap = np.array(case_info["Transform_A_P"])
-    elif case_info["reference"] == "ala-tragus":
-        transform_ap = np.array(case_info["Transform_A_P_Tragus"])
+    # # 输入数据
+    bp = case_info["BP"] + np.array([0, -3, 0])
+    lp = case_info["LP"] + np.array([0, -3, 0])
+    rp = case_info["RP"] + np.array([0, -3, 0])
 
-    #####################################################################
-    # -----------   计算转移平台的信息    ------------ #
+    combine_matrix = np.array(case_info["combine_matrix"])
+    # 计算位移补偿
+    ip_lc= case_info["IP_LC"]
+    ip_rc= case_info["IP_RC"]
+    ip_max = max(ip_lc, ip_rc)
+    move_distance = 0.0
+    if ip_max < 105.0:
+        move_distance = 105.0 - ip_max
+        move_distance *= -2.0
+    # 计算点变换后的位置,并进行位移补偿
+    bp_a = np.dot(combine_matrix, np.append(bp, 1))[:3] + np.array([0, move_distance, 0])
+    lp_a = np.dot(combine_matrix, np.append(lp, 1))[:3] + np.array([0, move_distance, 0])
+    rp_a = np.dot(combine_matrix, np.append(rp, 1))[:3] + np.array([0, move_distance, 0])
+    # #####################################################################
+    # # -----------   计算转移平台的信息    ------------ #
     #####################################################################
     # A坐标系Z=0水平面上3个点, 形成一个水平面方程（水平面就是后面的UV平面）          —— A坐标系下
     p1_uv = [1, 0, 0]
@@ -859,12 +1020,6 @@ def get_platform_info(case_info):
     p3_uv = [0, 1, 0]
     plane_uv = define_plane(p1_uv, p2_uv, p3_uv)
     norm_plane_uv = np.array([plane_uv[0], plane_uv[1], plane_uv[2]])
-
-    # 颌插板平面：BP， LP, RP 形成的平面 (但是需要把BP,LP,RP换成A坐标系下的坐标)    —— A坐标系下
-    # 选择不同的参考平面，颌插板;  在颌架中，为了适配机械面弓，髁突和颌插板需要前向平移一个量
-    bp_a = (transform_ap @ np.append(bp, 1))[:-1] + case_info["articulator"]["translation"]
-    lp_a = (transform_ap @ np.append(lp, 1))[:-1] + case_info["articulator"]["translation"]
-    rp_a = (transform_ap @ np.append(rp, 1))[:-1] + case_info["articulator"]["translation"]
     plane_jaw_splint = define_plane(bp_a, lp_a, rp_a)
     norm_plane_jaw_splint = np.array([plane_jaw_splint[0], plane_jaw_splint[1], plane_jaw_splint[2]])
 
@@ -872,10 +1027,10 @@ def get_platform_info(case_info):
     cos_theta = np.vdot(norm_plane_uv, norm_plane_jaw_splint) / (
             np.linalg.norm(norm_plane_uv) * np.linalg.norm(norm_plane_jaw_splint))
 
-    # 计算长度后，需要根据观察平面，调整下杆上的刻度值，颌插板0点平面距离观察平面有3mm的高度，
-    pin_length_center = abs(bp_a[2] / cos_theta) + 3
-    pin_length_left = abs(lp_a[2] / cos_theta) + 3
-    pin_length_right = abs(rp_a[2] / cos_theta) + 3
+    # 计算长度已在初始位置调整视平面，
+    pin_length_center = abs(bp_a[2] / cos_theta)
+    pin_length_left = abs(lp_a[2] / cos_theta)
+    pin_length_right = abs(rp_a[2] / cos_theta)
 
     # BP沿法线延伸后与UV水平面相交，求交点                                      ——  A坐标系下
     norm_bp = np.array([plane_jaw_splint[0] + bp_a[0], plane_jaw_splint[1] + bp_a[1], plane_jaw_splint[2] + bp_a[2]])
@@ -1183,27 +1338,24 @@ def standard_report_page3(image, jaw_motion):
         # ********************    3子图中画轨迹（画点，然后和前面的点连线）   ******************** #
         for i in range(len(ip_list)):
             # figure 1,  IP点的XY
-            fig1_xy = (int(org_fig1[0] + scale_fig1 * ip_list[i][0]), int(org_fig1[1] - scale_fig1 * ip_list[i][1]))
+            fig1_xy = (int(org_fig1[0] + scale_fig1 * ip_list[i][0]), int(org_fig1[1] - scale_fig1 * ip_list[i][2]))
             if i > 0:
                 fig1_xy_pre = (
-                    int(org_fig1[0] + scale_fig1 * ip_list[i - 1][0]),
-                    int(org_fig1[1] - scale_fig1 * ip_list[i - 1][1]))
+                    int(org_fig1[0] + scale_fig1 * ip_list[i - 1][0]), int(org_fig1[1] - scale_fig1 * ip_list[i - 1][2]))
                 cv2.line(image, fig1_xy_pre, fig1_xy, motion_color, 1, line_type)
 
             # figure 2,  IP点的YZ
-            fig2_yz = (int(org_fig2[0] - scale_fig2 * ip_list[i][2]), int(org_fig2[1] - scale_fig2 * ip_list[i][1]))
+            fig2_yz = (int(org_fig2[0] + scale_fig2 * ip_list[i][1]), int(org_fig2[1] - scale_fig2 * ip_list[i][2]))
             if i > 0:
                 fig2_yz_pre = (
-                    int(org_fig2[0] - scale_fig2 * ip_list[i - 1][2]),
-                    int(org_fig2[1] - scale_fig2 * ip_list[i - 1][1]))
+                    int(org_fig2[0] + scale_fig2 * ip_list[i - 1][1]), int(org_fig2[1] - scale_fig2 * ip_list[i - 1][2]))
                 cv2.line(image, fig2_yz_pre, fig2_yz, motion_color, 1, line_type)
 
             # figure 3, IP点的XZ
-            fig3_xz = (int(org_fig3[0] + scale_fig3 * ip_list[i][0]), int(org_fig3[1] + scale_fig3 * ip_list[i][2]))
+            fig3_xz = (int(org_fig3[0] - scale_fig3 * ip_list[i][0]), int(org_fig3[1] - scale_fig3 * ip_list[i][1]))
             if i > 0:
                 fig3_xz_pre = (
-                    int(org_fig3[0] + scale_fig3 * ip_list[i - 1][0]),
-                    int(org_fig3[1] + scale_fig3 * ip_list[i - 1][2]))
+                    int(org_fig3[0] - scale_fig3 * ip_list[i - 1][0]), int(org_fig3[1] - scale_fig3 * ip_list[i - 1][1]))
                 cv2.line(image, fig3_xz_pre, fig3_xz, motion_color, 1, line_type)
 
     return image
@@ -1272,45 +1424,45 @@ def standard_report_page4(image, jaw_motion):
         # ********************    6副子图中画轨迹（画点，然后和前面的点连线）   ******************** #
         for i in range(len(rc_list)):
             # figure 1, RC点的XY
-            fig1_xy = (int(org_fig1[0] + scale * rc_list[i][0]), int(org_fig1[1] - scale * rc_list[i][1]))
+            fig1_xy = (int(org_fig1[0] + scale * rc_list[i][0]), int(org_fig1[1] - scale * rc_list[i][2]))
             if i > 0:
                 fig1_xz_pre = (
-                    int(org_fig1[0] + scale * rc_list[i - 1][0]), int(org_fig1[1] - scale * rc_list[i - 1][1]))
+                    int(org_fig1[0] + scale * rc_list[i - 1][0]), int(org_fig1[1] - scale * rc_list[i - 1][2]))
                 cv2.line(image, fig1_xz_pre, fig1_xy, motion_color, 1, line_type)
 
             # figure 3, RC点的XZ
-            fig3_xz = (int(org_fig3[0] + scale * rc_list[i][0]), int(org_fig3[1] + scale * rc_list[i][2]))
+            fig3_xz = (int(org_fig3[0] + scale * rc_list[i][0]), int(org_fig3[1] - scale * rc_list[i][1]))
             if i > 0:
                 fig3_xz_pre = (
-                    int(org_fig3[0] + scale * rc_list[i - 1][0]), int(org_fig3[1] + scale * rc_list[i - 1][2]))
+                    int(org_fig3[0] + scale * rc_list[i - 1][0]), int(org_fig3[1] - scale * rc_list[i - 1][1]))
                 cv2.line(image, fig3_xz_pre, fig3_xz, motion_color, 1, line_type)
 
             # figure 5, RC点的ZY
-            fig5_yz = (int(org_fig5[0] + scale * rc_list[i][2]), int(org_fig5[1] - scale * rc_list[i][1]))
+            fig5_yz = (int(org_fig5[0] - scale * rc_list[i][1]), int(org_fig5[1] - scale * rc_list[i][2]))
             if i > 0:
                 fig5_yz_pre = (
-                    int(org_fig5[0] + scale * rc_list[i - 1][2]), int(org_fig5[1] - scale * rc_list[i - 1][1]))
+                    int(org_fig5[0] - scale * rc_list[i - 1][1]), int(org_fig5[1] - scale * rc_list[i - 1][2]))
                 cv2.line(image, fig5_yz_pre, fig5_yz, motion_color, 1, line_type)
 
             # figure 2, LC点的XY
-            fig2_xy = (int(org_fig2[0] + scale * lc_list[i][0]), int(org_fig2[1] - scale * lc_list[i][1]))
+            fig2_xy = (int(org_fig2[0] + scale * lc_list[i][0]), int(org_fig2[1] - scale * lc_list[i][2]))
             if i > 0:
                 fig2_xz_pre = (
-                    int(org_fig2[0] + scale * lc_list[i - 1][0]), int(org_fig2[1] - scale * lc_list[i - 1][1]))
+                    int(org_fig2[0] + scale * lc_list[i - 1][0]), int(org_fig2[1] - scale * lc_list[i - 1][2]))
                 cv2.line(image, fig2_xz_pre, fig2_xy, motion_color, 1, line_type)
 
             # figure 4, LC点的XZ
-            fig4_xz = (int(org_fig4[0] + scale * lc_list[i][0]), int(org_fig4[1] + scale * lc_list[i][2]))
+            fig4_xz = (int(org_fig4[0] + scale * lc_list[i][0]), int(org_fig4[1] - scale * lc_list[i][1]))
             if i > 0:
                 fig4_xz_pre = (
-                    int(org_fig4[0] + scale * lc_list[i - 1][0]), int(org_fig4[1] + scale * lc_list[i - 1][2]))
+                    int(org_fig4[0] + scale * lc_list[i - 1][0]), int(org_fig4[1] - scale * lc_list[i - 1][1]))
                 cv2.line(image, fig4_xz_pre, fig4_xz, motion_color, 1, line_type)
 
             # figure 6, LC点的ZY
-            fig6_yz = (int(org_fig6[0] - scale * lc_list[i][2]), int(org_fig6[1] - scale * lc_list[i][1]))
+            fig6_yz = (int(org_fig6[0] + scale * lc_list[i][1]), int(org_fig6[1] - scale * lc_list[i][2]))
             if i > 0:
                 fig6_yz_pre = (
-                    int(org_fig6[0] - scale * lc_list[i - 1][2]), int(org_fig6[1] - scale * lc_list[i - 1][1]))
+                    int(org_fig6[0] + scale * lc_list[i - 1][1]), int(org_fig6[1] - scale * lc_list[i - 1][2]))
                 cv2.line(image, fig6_yz_pre, fig6_yz, motion_color, 1, line_type)
 
     return image
