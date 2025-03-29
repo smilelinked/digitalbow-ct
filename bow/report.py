@@ -65,13 +65,13 @@ def get_jaw_motion_json(object_prefix, case_info):
                 else:
                     if case_info["reference"] == "frankfurt":
                         jaw_motion[motion_type] = temple[0]
+                        _, pin_list = point_trajectory(temple[0]["Matrix_list"], case_info["pin_3d"])
+                        jaw_motion[motion_type]["pin_list"] = np.array(pin_list).tolist()
                     elif case_info["reference"] == "ala-tragus":
                         jaw_motion[motion_type] = temple[1]
+                        _, pin_list = point_trajectory(temple[1]["Matrix_list"], case_info["pin_3d"])
+                        jaw_motion[motion_type]["pin_list"] = np.array(pin_list).tolist()
 
-                # 计算 pin_list 并添加到 jaw_motion
-                if "pin_3d" in case_info:
-                    _, pin_list = point_trajectory(temple[0]["Matrix_list"], case_info["pin_3d"])
-                    jaw_motion[motion_type]["pin_list"] = np.array(pin_list).tolist()
     return jaw_motion_frankfurt, jaw_motion
 
 
@@ -632,21 +632,6 @@ def matrix_pin(uid, cid):
     pin_matrix = np.linalg.inv(pin_matrix)
     pin_3d = np.dot(pin_matrix, np.append(pin, 1))[:3]
     case_info["pin_3d"] = pin_3d.tolist()
-
-    resp = list_objects(get_object_prefix(uid, cid) + 'standard')
-    print(f"resp: {resp}")
-    if resp.get('ResponseMetadata').get('HTTPStatusCode') < 300 and resp.get('Contents') is not None:
-        for content in resp.get('Contents'):
-            key = content.get('Key')
-            if key.endswith(".json"):
-                track_data = json.loads(get_obj_exception(key).read())
-
-                # pin点的轨迹线,  眶耳平面,  F坐标系
-                _, pin_list = point_trajectory(track_data[0]["Matrix_list"], pin_3d)
-                # pin点的轨迹线,  鼻翼耳屏线,  T坐标系
-                _, pin_list_tragus = point_trajectory(track_data[1]["Matrix_list"], pin_3d)
-                put_json(key, track_data)
-
     #####################################################################
     # -----------    修改状态，并保持information     ------------ #
     #####################################################################
