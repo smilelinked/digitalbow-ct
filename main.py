@@ -51,6 +51,9 @@ def make_app():
             (r"/custom_report/(?P<cid>[0-9]+)", handler.CustomReportHandler),
             # (r"/custom_xml/(?P<cid>[0-9]+)", handler.CustomXMLHandler),
 
+            # 更新自定义点轨迹线
+            (r"/custom_motion_trajectory/(?P<cid>[0-9]+)", handler.CustomMotionTrajectory),
+
         ],
         **settings
     )
