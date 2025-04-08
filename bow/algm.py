@@ -1120,6 +1120,110 @@ def motion_trajectory(uid, cid, video_type, case_info, track_data=None):
 
     gc.collect()
 
+    # 计算自定义点轨迹线
+def custom_motion_trajectory(uid, cid):
+    try:
+        # 获取 case_info 并检查完整性
+        case_info = get_information_json(uid, cid)
+        if not isinstance(case_info, dict) or "custom_points" not in case_info:
+            return 400, "无效的case信息：缺少自定义点数据"
+
+        # 获取所有的 .track 文件
+        prefix = get_object_prefix(uid, cid)
+        track_files = list_objects(prefix)
+        video_types = extract_video_types(track_files)
+
+        if not video_types:
+            logging.warning(f"[Motion]: No track files found for case {cid}")
+            return 404, "未找到任何轨迹文件"
+
+        # 初始化存储自定义点轨迹的字典
+        custom_trajectories = {}
+
+        # 对每个找到的 video_type 进行处理
+        for current_video_type in video_types:
+            track_file = f"{prefix}{current_video_type}.track"
+            track_data = load_track_data(track_file)
+
+            if not track_data:
+                continue
+
+            matrix_list, matrix_list_tragus = extract_matrix_lists(track_data)
+
+            if not matrix_list or not matrix_list_tragus:
+                logging.warning(f"[Motion]: Matrix lists are empty for video type {current_video_type}")
+                continue
+
+            update_custom_trajectories(custom_trajectories, case_info["custom_points"], current_video_type, matrix_list, matrix_list_tragus)
+
+        # 保存合并后的数据
+        if custom_trajectories:
+            custom_points_file = f"{prefix}custom_points.json"
+            put_json(custom_points_file, custom_trajectories)
+            logging.info(f"[Motion]: Successfully updated custom points json in {custom_points_file}")
+            return 200, "自定义点轨迹计算完成"
+        else:
+            logging.warning(f"[Motion]: No trajectories calculated for case {cid}")
+            return 400, "未能计算出任何有效轨迹"
+
+    except Exception as e:
+        logging.error(f"[Motion]: An error occurred in custom_motion_trajectory: {e}")
+        return 500, f"处理过程发生错误：{str(e)}"
+
+def extract_video_types(track_files):
+    """从 track_files 中提取 video_types"""
+    video_types = []
+    if track_files.get('Contents'):
+        for item in track_files.get('Contents'):
+            key = item.get('Key')
+            if key.endswith('.track'):
+                video_type = key.split('/')[-1].replace('.track', '')
+                video_types.append(video_type)
+    return video_types
+
+def load_track_data(track_file):
+    """加载 track 数据并进行基本验证"""
+    try:
+        track_data = json.loads(get_obj_exception(track_file).read())
+        if not isinstance(track_data, list) or len(track_data) < 2:
+            logging.error(f"[Motion]: Invalid track_data for file {track_file}")
+            return None
+        if "Matrix_list" not in track_data[0] or "Matrix_list" not in track_data[1]:
+            logging.error(f"[Motion]: Missing Matrix_list for file {track_file}")
+            return None
+        return track_data
+    except Exception as e:
+        logging.error(f"[Motion]: Failed to load track file {track_file}: {e}")
+        return None
+
+def extract_matrix_lists(track_data):
+    """从 track_data 中提取矩阵列表"""
+    matrix_list = track_data[0].get("Matrix_list", [])
+    matrix_list_tragus = track_data[1].get("Matrix_list", [])
+    return matrix_list, matrix_list_tragus
+
+def update_custom_trajectories(custom_trajectories, custom_points, video_type, matrix_list, matrix_list_tragus):
+    """更新自定义点轨迹"""
+    for point_name, point in custom_points.items():
+        if point_name not in custom_trajectories:
+            custom_trajectories[point_name] = {"frankfurt": [], "ala-tragus": []}
+
+        frankfurt_point_3d, _ = point_trajectory(matrix_list, point)
+        ala_tragus_point_3d, _ = point_trajectory(matrix_list_tragus, point)
+
+        custom_trajectories[point_name]["frankfurt"].append({
+            "video_name": video_type,
+            "data": {
+                "3D": frankfurt_point_3d.tolist(),
+            }
+        })
+
+        custom_trajectories[point_name]["ala-tragus"].append({
+            "video_name": video_type,
+            "data": {
+                "3D": ala_tragus_point_3d.tolist(),
+            }
+        })
 
 # 更新轨迹线
 def motion_renew(uid, cid):

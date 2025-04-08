@@ -14,7 +14,8 @@ from tornado.ioloop import IOLoop
 from bow.algm import ShowingException, stable_step1, stable_step2, stable_step3, get_stable_step1_queue, \
     CANCEL_SIGNAL_VALUE, get_stable_step3_queue, clear_stable_related_resource, position, get_position_queue, \
     clear_position_related_resource, motion, get_motion_queue, get_case_status, modify_information, motion_renew, \
-    STOP_WS_CODE, MOTION_RUNNING_CASES, get_redis_connection, app_ready, code_detect, finish_detect
+    STOP_WS_CODE, MOTION_RUNNING_CASES, get_redis_connection, app_ready, code_detect, finish_detect, \
+    custom_motion_trajectory
 from bow.registration import rigid_transformation, write_pose
 from bow.report import stable_report, position_report, standard_report, standard_xml, custom_report
 
@@ -463,3 +464,27 @@ class CustomReportHandler(BaseHandler):
         asyncio.set_event_loop(loop)
         resp = custom_report(self._current_user, cid)
         self.write(resp)
+
+class CustomMotionTrajectory(BaseHandler):
+    @async_authenticated
+    async def get(self, cid):
+        loop = asyncio.get_event_loop()
+        await self._callback(cid, loop)
+
+    @run_on_executor
+    def _callback(self, cid, loop):
+        asyncio.set_event_loop(loop)
+        try:
+            status_code, message = custom_motion_trajectory(self._current_user, cid)
+            self.write({
+                "code": status_code,
+                "message": message
+            })
+            if status_code != 200:
+                self.set_status(status_code)
+        except Exception as e:
+            self.set_status(500)
+            self.write({
+                "code": 500,
+                "message": f"服务器错误: {str(e)}"
+            })
